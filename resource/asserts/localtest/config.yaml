@@ -1,0 +1,24 @@
+env: "dev"
+log:
+  level: "INFO"
+  std_err_level: "INFO"
+chain_node: #链节点配置
+  chain_id: mangochain
+  org_id: mangochain1.mgtv.com
+  tls: true
+  tls_host: mgtv.com
+  conn_cnt: 10
+  remotes:
+    - address: 175.6.15.201:12301 #10.200.20.162:12301 #175.6.15.201
+      ca_path: asserts/localtest/crypto-config/mangochain1.mgtv.com/ca/ca.crt
+chain_admin_crts:
+  - tls_key_path: "asserts/localtest/crypto-config/mangochain1.mgtv.com/user/admin1/admin1.tls.key"
+    tls_crt_path: "asserts/localtest/crypto-config/mangochain1.mgtv.com/user/admin1/admin1.tls.crt"
+  - tls_key_path: "asserts/localtest/crypto-config/mangochain2.mgtv.com/user/admin1/admin1.tls.key"
+    tls_crt_path: "asserts/localtest/crypto-config/mangochain2.mgtv.com/user/admin1/admin1.tls.crt"
+  - tls_key_path: "asserts/localtest/crypto-config/mangochain3.mgtv.com/user/admin1/admin1.tls.key"
+    tls_crt_path: "asserts/localtest/crypto-config/mangochain3.mgtv.com/user/admin1/admin1.tls.crt"
+  - tls_key_path: "asserts/localtest/crypto-config/mangochain4.mgtv.com/user/admin1/admin1.tls.key"
+    tls_crt_path: "asserts/localtest/crypto-config/mangochain4.mgtv.com/user/admin1/admin1.tls.crt"
+  - tls_key_path: "asserts/localtest/crypto-config/mangochain5.mgtv.com/user/admin1/admin1.tls.key"
+    tls_crt_path: "asserts/localtest/crypto-config/mangochain5.mgtv.com/user/admin1/admin1.tls.crt"

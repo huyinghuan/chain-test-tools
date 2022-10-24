@@ -1,0 +1,16 @@
+{
+    "go.testEnvVars": {
+        "SAVECERTTODIR": "${workspaceFolder}/node-certs"
+    },
+    "go.testFlags": [
+        "-v",
+        "-count=1",
+    ],
+    "go.testTimeout": "300s",
+    "go.toolsEnvVars": {
+        "GOPROXY": "https://goproxy.io,direct"
+    },
+    "yaml.schemas": {
+        "https://raw.fastgit.org/ansible-community/schemas/main/f/ansible-playbook.json": "*.playbool.yml"
+    }
+}

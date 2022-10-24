@@ -1,0 +1,22 @@
+env: "dev"
+log:
+  level: "DEBUG"
+  std_err_level: "DEBUG"
+chain_node: #链节点配置
+  chain_id: chain1
+  org_id: wx-org1.chainmaker.org
+  tls: true
+  tls_host: chainmaker.org
+  ca_paths:
+    - asserts/dev/rootCA/tls/root-tls.crt
+  remotes:
+    - 10.200.20.88:12301
+chain_admin_crts:
+  - tls_key_path: "asserts/dev/wx-org1.chainmaker.org/user/admin1/admin1.tls.key"
+    tls_crt_path: "asserts/dev/wx-org1.chainmaker.org/user/admin1/admin1.tls.crt"
+  - tls_key_path: "asserts/dev/wx-org2.chainmaker.org/user/admin1/admin1.tls.key"
+    tls_crt_path: "asserts/dev/wx-org2.chainmaker.org/user/admin1/admin1.tls.crt"
+  - tls_key_path: "asserts/dev/wx-org3.chainmaker.org/user/admin1/admin1.tls.key"
+    tls_crt_path: "asserts/dev/wx-org3.chainmaker.org/user/admin1/admin1.tls.crt"
+  - tls_key_path: "asserts/dev/wx-org4.chainmaker.org/user/admin1/admin1.tls.key"
+    tls_crt_path: "asserts/dev/wx-org4.chainmaker.org/user/admin1/admin1.tls.crt"
