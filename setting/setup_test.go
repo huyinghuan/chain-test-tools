@@ -4,8 +4,6 @@ import (
 	"chain-api-imgo/config"
 	"log"
 	"testing"
-
-	_ "github.com/go-sql-driver/mysql"
 )
 
 func TestSetup(t *testing.T) {

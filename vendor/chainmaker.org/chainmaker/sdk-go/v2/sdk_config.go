@@ -912,7 +912,7 @@ func dealConfig(config *ChainClientConfig) error {
 
 	//gmtls enc key/cert set
 	_ = dealUserEncCrtKeyConfig(config)
-
+	//return nil
 	if err = dealUserSignCrtConfig(config); err != nil {
 		return err
 	}

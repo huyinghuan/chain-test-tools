@@ -16,7 +16,7 @@ func main() {
 	flag.IntVar(&args.Tx, "tx", 1000, "每个合约调用tx次交易")
 	flag.IntVar(&args.S, "s", 0, "sleep")
 	flag.Parse()
-
+	log.SetFlags(log.Ldate | log.Ltime | log.Llongfile)
 	var err error
 	err = setting.Setup(args.Env)
 	if err != nil {

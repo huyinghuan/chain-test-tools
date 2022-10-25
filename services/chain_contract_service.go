@@ -143,7 +143,7 @@ func CalcContractName(contractName string) string {
 获取用户的链接
 OrgId, ChainId
 */
-func GetUserChainClient(userKeyBytes, userCertBytes []byte, args ...string) (*sdk.ChainClient, error) {
+func GetUserChainClient(userKeyBytes, userCertBytes, userSignKeyBytes, userSignCertBytes []byte, args ...string) (*sdk.ChainClient, error) {
 	conf := config.GetConfig().ChainNode
 	orgId := conf.OrgId
 	chainId := conf.ChainId
@@ -157,6 +157,8 @@ func GetUserChainClient(userKeyBytes, userCertBytes []byte, args ...string) (*sd
 	nodeOptions = append(nodeOptions, sdk.WithChainClientChainId(chainId))
 	nodeOptions = append(nodeOptions, sdk.WithUserKeyBytes(userKeyBytes))
 	nodeOptions = append(nodeOptions, sdk.WithUserCrtBytes(userCertBytes))
+	nodeOptions = append(nodeOptions, sdk.WithUserSignKeyBytes(userSignKeyBytes))
+	nodeOptions = append(nodeOptions, sdk.WithUserSignCrtBytes(userSignCertBytes))
 	nodeOptions = append(nodeOptions, sdk.WithAuthType("permissionedwithcert"))
 	// var caCerts []string
 	// for _, caPath := range conf.CaPaths {

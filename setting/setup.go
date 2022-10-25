@@ -4,8 +4,6 @@ import (
 	"chain-api-imgo/config"
 	"log"
 	"os"
-
-	_ "github.com/go-sql-driver/mysql"
 )
 
 // 待编译注入

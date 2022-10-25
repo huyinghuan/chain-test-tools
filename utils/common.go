@@ -1,9 +1,7 @@
 package utils
 
 import (
-	"github.com/Tomasen/realip"
 	"math/rand"
-	"net/http"
 	"regexp"
 	"runtime"
 	"time"
@@ -61,14 +59,6 @@ func GenerateRandnum(min, max int) (rnd int) {
 	}
 	rand.Seed(time.Now().UnixNano())
 	return rand.Intn(max-min) + min
-}
-
-func GetRealIp(r *http.Request) (ip string) {
-	ip = realip.FromRequest(r)
-	if ip == "" {
-		ip = "127.0.0.1"
-	}
-	return
 }
 
 //验证手机号码

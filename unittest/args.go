@@ -1,8 +1,10 @@
 package unittest
 
 import (
+	"chain-api-imgo/config"
 	"chain-api-imgo/resource"
 	"chain-api-imgo/services"
+	"fmt"
 
 	"log"
 
@@ -22,20 +24,28 @@ func (a *Args) times() int {
 }
 
 func getChain() (chainClient *sdk.ChainClient, err error) {
-	var keyBody, crtBody []byte
-	if keyBody, err = resource.Get("asserts/localtest/crypto-config/mangochain1.mgtv.com/user/client1/client1.sign.key"); err != nil {
+	var keyBody, crtBody, signKeyBody, signCrtBody []byte
+	conf := config.GetConfig()
+	if keyBody, err = resource.Get(conf.Client.Key); err != nil {
 		log.Println(err)
 		return
 	}
-	if crtBody, err = resource.Get("asserts/localtest/crypto-config/mangochain1.mgtv.com/user/client1/client1.sign.crt"); err != nil {
+	if crtBody, err = resource.Get(conf.Client.Crt); err != nil {
 		return
 	}
-	chainClient, _, err = services.GetKeepAliveChainClient(true, keyBody, crtBody)
+	if signKeyBody, err = resource.Get(conf.Client.SignKey); err != nil {
+		log.Println(err)
+		return
+	}
+	if signCrtBody, err = resource.Get(conf.Client.SignCrt); err != nil {
+		return
+	}
+	chainClient, _, err = services.GetKeepAliveChainClient(true, keyBody, crtBody, signKeyBody, signCrtBody)
 	return
 }
 
 func simpleShow(fn func()) {
-	log.Println("\n\n\n----------------")
+	fmt.Println("\n\n\n----------------")
 	fn()
-	log.Println("\n\n\n----------------")
+	fmt.Println("----------------")
 }

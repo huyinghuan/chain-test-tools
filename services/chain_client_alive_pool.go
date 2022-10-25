@@ -10,7 +10,7 @@ import (
 var aliveLock = sync.RWMutex{}
 var alivePool = make(map[string]*sdk.ChainClient)
 
-func GetKeepAliveChainClient(cacheClientToPool bool, userKeyBytes, userCertBytes []byte, args ...string) (chainClient *sdk.ChainClient, fromCache bool, err error) {
+func GetKeepAliveChainClient(cacheClientToPool bool, userKeyBytes, userCertBytes, userSignKeyBytes, userSignCertBytes []byte, args ...string) (chainClient *sdk.ChainClient, fromCache bool, err error) {
 	addr, _, _, err := utils.ParseAddrAndSkiFromCrtBytes(userCertBytes)
 	if err == nil {
 		aliveLock.RLock()
@@ -21,7 +21,7 @@ func GetKeepAliveChainClient(cacheClientToPool bool, userKeyBytes, userCertBytes
 		}
 		aliveLock.RUnlock()
 	}
-	client, err := GetUserChainClient(userKeyBytes, userCertBytes, args...)
+	client, err := GetUserChainClient(userKeyBytes, userCertBytes, userSignKeyBytes, userSignCertBytes, args...)
 	if err != nil {
 		return nil, fromCache, err
 	}

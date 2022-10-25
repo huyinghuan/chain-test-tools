@@ -53,6 +53,13 @@ type ChainAdminCrts struct {
 	TlsCrtPath string `yaml:"tls_crt_path"`
 }
 
+type ConnectClient struct {
+	Key     string `yaml:"key"`
+	Crt     string `yaml:"crt"`
+	SignKey string `yaml:"sign_key"`
+	SignCrt string `yaml:"sign_crt"`
+}
+
 type Config struct {
 	Env            string           `yaml:"env"`
 	Log            LogConfig        `yaml:"log,flow"`
@@ -60,7 +67,7 @@ type Config struct {
 	Mysql          []MysqlConfig    `yaml:"mysql"`
 	ChainNode      ChainNode        `yaml:"chain_node"`
 	ChainAdminCrts []ChainAdminCrts `yaml:"chain_admin_crts"` // 链的root证书列表
-
+	Client         ConnectClient    `yaml:"client"`
 	// CaBaseConfig CaBaseConfig `yaml:"ca_base_config"`
 	// ChainAdminName      []string              `yaml:"chain_admin_name"`
 	//ChainUser           map[string]*ChainUser `yaml:"chain_user"`
