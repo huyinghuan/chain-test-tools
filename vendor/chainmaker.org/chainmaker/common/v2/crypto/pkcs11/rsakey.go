@@ -12,6 +12,9 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"io"
+	"strconv"
+
+	"chainmaker.org/chainmaker/common/v2/crypto/hsm"
 
 	bcrsa "chainmaker.org/chainmaker/common/v2/crypto/asym/rsa"
 
@@ -57,14 +60,27 @@ func NewP11RSAPrivateKey(p11 *P11Handle, keyId []byte, keyType P11KeyType) (bccr
 		return nil, errors.New("Invalid parameter, p11 or keyId is nil")
 	}
 
-	obj, err := p11.findPrivateKey(keyId)
+	//find private key
+	id, err := strconv.Atoi(string(keyId))
 	if err != nil {
-		return nil, errors.WithMessagef(err, "failed to find private key, keyId = %s", string(keyId))
+		return nil, err
 	}
-
-	pubKey, err := p11.ExportRSAPublicKey(keyId)
+	keyIdStr, err := hsm.GetHSMAdapter("").PKCS11_GetRSAKeyId(id, true)
 	if err != nil {
-		return nil, errors.WithMessagef(err, "New ecdsa PrivateKey failed")
+		return nil, err
+	}
+	obj, err := p11.findPrivateKey([]byte(keyIdStr))
+	if err != nil {
+		return nil, errors.WithMessagef(err, "failed to find private key, keyId = %s", keyIdStr)
+	}
+	//export public key
+	keyIdStr, err = hsm.GetHSMAdapter("").PKCS11_GetRSAKeyId(id, false)
+	if err != nil {
+		return nil, err
+	}
+	pubKey, err := p11.ExportRSAPublicKey([]byte(keyIdStr))
+	if err != nil {
+		return nil, errors.WithMessagef(err, "failed to export rsa public key, keyId = %s", keyIdStr)
 	}
 
 	p11PrivateKey := &p11RsaPrivateKey{

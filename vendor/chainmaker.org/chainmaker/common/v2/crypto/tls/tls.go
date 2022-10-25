@@ -296,7 +296,6 @@ func X509KeyPair(certPEMBlock, keyPEMBlock []byte) (Certificate, error) {
 	default:
 		return fail(errors.New("tls: unknown public key algorithm"))
 	}
-
 	return cert, nil
 }
 

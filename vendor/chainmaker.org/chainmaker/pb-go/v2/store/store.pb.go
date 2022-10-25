@@ -66,6 +66,37 @@ func (DbType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_8549980b097f750b, []int{0}
 }
 
+type DataStoreType int32
+
+const (
+	// 文件系统存储
+	DataStoreType_FILE_STORE DataStoreType = 0
+	//SQL数据库存储
+	DataStoreType_SQL_STORE DataStoreType = 1
+	//云对象存储
+	DataStoreType_COS DataStoreType = 2
+)
+
+var DataStoreType_name = map[int32]string{
+	0: "FILE_STORE",
+	1: "SQL_STORE",
+	2: "COS",
+}
+
+var DataStoreType_value = map[string]int32{
+	"FILE_STORE": 0,
+	"SQL_STORE":  1,
+	"COS":        2,
+}
+
+func (x DataStoreType) String() string {
+	return proto.EnumName(DataStoreType_name, int32(x))
+}
+
+func (DataStoreType) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_8549980b097f750b, []int{1}
+}
+
 // block structure used in serialization
 type SerializedBlock struct {
 	// header of block
@@ -203,45 +234,228 @@ func (m *BlockWithRWSet) GetContractEvents() []*common.ContractEvent {
 	return nil
 }
 
+// transaction info include transaction and its block height hash and tx index
+type TransactionStoreInfo struct {
+	// transaction raw data
+	Transaction *common.Transaction `protobuf:"bytes,1,opt,name=transaction,proto3" json:"transaction,omitempty"`
+	// block height
+	BlockHeight uint64 `protobuf:"varint,2,opt,name=block_height,json=blockHeight,proto3" json:"block_height,omitempty"`
+	// Deprecated, block hash
+	BlockHash []byte `protobuf:"bytes,3,opt,name=block_hash,json=blockHash,proto3" json:"block_hash,omitempty"`
+	// transaction index in block
+	TxIndex uint32 `protobuf:"varint,4,opt,name=tx_index,json=txIndex,proto3" json:"tx_index,omitempty"`
+	// block header timestamp
+	BlockTimestamp int64 `protobuf:"varint,5,opt,name=block_timestamp,json=blockTimestamp,proto3" json:"block_timestamp,omitempty"`
+	// transaction offset index in file
+	TransactionStoreInfo *StoreInfo `protobuf:"bytes,6,opt,name=transaction_store_info,json=transactionStoreInfo,proto3" json:"transaction_store_info,omitempty"`
+}
+
+func (m *TransactionStoreInfo) Reset()         { *m = TransactionStoreInfo{} }
+func (m *TransactionStoreInfo) String() string { return proto.CompactTextString(m) }
+func (*TransactionStoreInfo) ProtoMessage()    {}
+func (*TransactionStoreInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8549980b097f750b, []int{2}
+}
+func (m *TransactionStoreInfo) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *TransactionStoreInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_TransactionStoreInfo.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *TransactionStoreInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TransactionStoreInfo.Merge(m, src)
+}
+func (m *TransactionStoreInfo) XXX_Size() int {
+	return m.Size()
+}
+func (m *TransactionStoreInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_TransactionStoreInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_TransactionStoreInfo proto.InternalMessageInfo
+
+func (m *TransactionStoreInfo) GetTransaction() *common.Transaction {
+	if m != nil {
+		return m.Transaction
+	}
+	return nil
+}
+
+func (m *TransactionStoreInfo) GetBlockHeight() uint64 {
+	if m != nil {
+		return m.BlockHeight
+	}
+	return 0
+}
+
+func (m *TransactionStoreInfo) GetBlockHash() []byte {
+	if m != nil {
+		return m.BlockHash
+	}
+	return nil
+}
+
+func (m *TransactionStoreInfo) GetTxIndex() uint32 {
+	if m != nil {
+		return m.TxIndex
+	}
+	return 0
+}
+
+func (m *TransactionStoreInfo) GetBlockTimestamp() int64 {
+	if m != nil {
+		return m.BlockTimestamp
+	}
+	return 0
+}
+
+func (m *TransactionStoreInfo) GetTransactionStoreInfo() *StoreInfo {
+	if m != nil {
+		return m.TransactionStoreInfo
+	}
+	return nil
+}
+
+// store data information
+type StoreInfo struct {
+	//store type
+	StoreType DataStoreType `protobuf:"varint,1,opt,name=store_type,json=storeType,proto3,enum=store.DataStoreType" json:"store_type,omitempty"`
+	// file name
+	FileName string `protobuf:"bytes,2,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	// offset in file
+	Offset uint64 `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
+	// data length
+	ByteLen uint64 `protobuf:"varint,4,opt,name=byte_len,json=byteLen,proto3" json:"byte_len,omitempty"`
+}
+
+func (m *StoreInfo) Reset()         { *m = StoreInfo{} }
+func (m *StoreInfo) String() string { return proto.CompactTextString(m) }
+func (*StoreInfo) ProtoMessage()    {}
+func (*StoreInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_8549980b097f750b, []int{3}
+}
+func (m *StoreInfo) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *StoreInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_StoreInfo.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *StoreInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StoreInfo.Merge(m, src)
+}
+func (m *StoreInfo) XXX_Size() int {
+	return m.Size()
+}
+func (m *StoreInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_StoreInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StoreInfo proto.InternalMessageInfo
+
+func (m *StoreInfo) GetStoreType() DataStoreType {
+	if m != nil {
+		return m.StoreType
+	}
+	return DataStoreType_FILE_STORE
+}
+
+func (m *StoreInfo) GetFileName() string {
+	if m != nil {
+		return m.FileName
+	}
+	return ""
+}
+
+func (m *StoreInfo) GetOffset() uint64 {
+	if m != nil {
+		return m.Offset
+	}
+	return 0
+}
+
+func (m *StoreInfo) GetByteLen() uint64 {
+	if m != nil {
+		return m.ByteLen
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterEnum("store.DbType", DbType_name, DbType_value)
+	proto.RegisterEnum("store.DataStoreType", DataStoreType_name, DataStoreType_value)
 	proto.RegisterType((*SerializedBlock)(nil), "store.SerializedBlock")
 	proto.RegisterType((*BlockWithRWSet)(nil), "store.BlockWithRWSet")
+	proto.RegisterType((*TransactionStoreInfo)(nil), "store.TransactionStoreInfo")
+	proto.RegisterType((*StoreInfo)(nil), "store.StoreInfo")
 }
 
 func init() { proto.RegisterFile("store/store.proto", fileDescriptor_8549980b097f750b) }
 
 var fileDescriptor_8549980b097f750b = []byte{
-	// 461 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x54, 0x92, 0xc1, 0x6e, 0x9b, 0x4c,
-	0x14, 0x85, 0x8d, 0x09, 0x24, 0xb9, 0xfc, 0x81, 0x3f, 0x13, 0xa5, 0x45, 0x95, 0x8a, 0xac, 0x74,
-	0x63, 0x35, 0x2a, 0x48, 0xee, 0xbe, 0x15, 0x0e, 0x6e, 0x8b, 0x1a, 0x25, 0xd2, 0x18, 0xd5, 0x51,
-	0xbb, 0x40, 0x03, 0x8c, 0x6c, 0x14, 0x9b, 0xb1, 0x86, 0x69, 0xea, 0x76, 0xdd, 0x07, 0xe8, 0x33,
-	0xf4, 0x1d, 0xfa, 0x0e, 0x5d, 0x66, 0xd9, 0x65, 0x65, 0xbf, 0x48, 0xc5, 0x00, 0x4e, 0xb2, 0x41,
-	0x9c, 0xef, 0x9c, 0x7b, 0x74, 0x41, 0x17, 0x0e, 0x4b, 0xc1, 0x38, 0xf5, 0xe4, 0xd3, 0x5d, 0x72,
-	0x26, 0x18, 0xd2, 0xa4, 0x78, 0x82, 0x52, 0xb6, 0x58, 0xb0, 0xc2, 0x4b, 0xe6, 0x2c, 0xbd, 0xae,
-	0xad, 0x2d, 0xe3, 0x5f, 0x4a, 0x2a, 0x1a, 0x76, 0xd4, 0x32, 0x5a, 0x7e, 0x9e, 0x37, 0xf0, 0xe4,
-	0x97, 0x02, 0xd6, 0x98, 0xf2, 0x9c, 0xcc, 0xf3, 0x6f, 0x34, 0x1b, 0x56, 0x15, 0xe8, 0x14, 0xf4,
-	0x19, 0x25, 0x19, 0xe5, 0xb6, 0xd2, 0x53, 0xfa, 0xc6, 0xe0, 0xc8, 0xad, 0x27, 0x5d, 0x69, 0xbf,
-	0x93, 0x16, 0x6e, 0x22, 0xe8, 0x29, 0xa8, 0x19, 0x99, 0xda, 0x5d, 0x99, 0x34, 0xda, 0x64, 0xe0,
-	0xbf, 0xc5, 0x15, 0x47, 0xc7, 0xa0, 0x8b, 0x55, 0x9c, 0x67, 0xa5, 0xad, 0xf6, 0xd4, 0xfe, 0x3e,
-	0xd6, 0xc4, 0x2a, 0xcc, 0x4a, 0xf4, 0x1a, 0x2c, 0x92, 0x65, 0xb9, 0xc8, 0x59, 0x41, 0xe6, 0x71,
-	0x46, 0x04, 0xb1, 0x77, 0x64, 0xc3, 0xa3, 0xb6, 0xc1, 0xdf, 0xda, 0x01, 0x11, 0x04, 0x9b, 0xe4,
-	0x81, 0x3e, 0xf9, 0xa9, 0x80, 0x29, 0xd7, 0x99, 0xe4, 0x62, 0x86, 0x27, 0x63, 0x2a, 0xd0, 0x33,
-	0xd0, 0xe4, 0x2f, 0x68, 0xb6, 0x3e, 0x78, 0xb0, 0x35, 0xae, 0x3d, 0x74, 0x0a, 0x7b, 0x62, 0x25,
-	0xf3, 0xa5, 0xdd, 0xed, 0xa9, 0x7d, 0x63, 0x60, 0xb5, 0xb9, 0xa8, 0xe6, 0x78, 0x1b, 0x40, 0xaf,
-	0xc0, 0x4a, 0x59, 0x21, 0x38, 0x49, 0x45, 0x4c, 0x6f, 0x68, 0x21, 0xea, 0xaf, 0x30, 0x06, 0xc7,
-	0xed, 0xcc, 0x59, 0x63, 0x8f, 0x2a, 0x17, 0x9b, 0xe9, 0x7d, 0x59, 0x3e, 0xff, 0xae, 0x80, 0x1e,
-	0x24, 0xd1, 0xd7, 0x25, 0x45, 0x26, 0x40, 0x78, 0xf1, 0xc1, 0x3f, 0x0f, 0x83, 0x38, 0x18, 0xfe,
-	0xdf, 0x41, 0xff, 0xc1, 0xde, 0xf0, 0xfc, 0xf2, 0xec, 0x7d, 0xa5, 0x14, 0x84, 0xc0, 0xac, 0x55,
-	0x78, 0x11, 0x8c, 0xae, 0x2a, 0xd6, 0x45, 0xfb, 0xa0, 0x45, 0xf2, 0x55, 0x45, 0x16, 0x18, 0xd1,
-	0xd5, 0x9d, 0xb7, 0x83, 0x0c, 0xd8, 0x1d, 0x5f, 0xbe, 0x89, 0x2a, 0xa1, 0x55, 0x55, 0xe3, 0xc8,
-	0x8f, 0x46, 0x95, 0xd2, 0xd1, 0x21, 0x1c, 0xe0, 0x91, 0x1f, 0xc4, 0x13, 0x1c, 0xd6, 0x68, 0x77,
-	0xf8, 0xe9, 0xf7, 0xda, 0x51, 0x6e, 0xd7, 0x8e, 0xf2, 0x77, 0xed, 0x28, 0x3f, 0x36, 0x4e, 0xe7,
-	0x76, 0xe3, 0x74, 0xfe, 0x6c, 0x9c, 0x0e, 0x3c, 0x66, 0x7c, 0xea, 0xa6, 0x33, 0x92, 0x17, 0x0b,
-	0x72, 0x4d, 0xb9, 0xbb, 0x4c, 0x5c, 0x79, 0x53, 0x1f, 0xfb, 0xf7, 0x20, 0xe3, 0x53, 0xef, 0x4e,
-	0x7a, 0xcb, 0xe4, 0xc5, 0x94, 0x79, 0x37, 0x83, 0xfa, 0x14, 0x13, 0x5d, 0xde, 0xd1, 0xcb, 0x7f,
-	0x01, 0x00, 0x00, 0xff, 0xff, 0x75, 0xfe, 0x19, 0xa4, 0xa0, 0x02, 0x00, 0x00,
+	// 714 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x54, 0xcd, 0x6e, 0xda, 0x58,
+	0x14, 0xc6, 0x98, 0x9f, 0xf8, 0x38, 0xfc, 0xe4, 0xe6, 0x67, 0x3c, 0x33, 0x0a, 0x62, 0x98, 0xc5,
+	0xa0, 0x44, 0x03, 0x12, 0x51, 0xd5, 0x5d, 0x2b, 0x08, 0xa4, 0xb5, 0x8a, 0x82, 0x7a, 0x6d, 0x35,
+	0x51, 0xbb, 0xb0, 0x2e, 0xf8, 0x02, 0x56, 0xc0, 0x46, 0xf6, 0x6d, 0x4a, 0xba, 0xee, 0x03, 0x64,
+	0xdf, 0x5d, 0xdf, 0xa1, 0xef, 0xd0, 0x65, 0x96, 0x5d, 0x56, 0xc9, 0x8b, 0x54, 0xf7, 0x5e, 0x1b,
+	0x48, 0xd5, 0x8d, 0xe5, 0xef, 0xe7, 0x1c, 0x9d, 0xf3, 0x1d, 0xcb, 0xb0, 0x13, 0xb1, 0x20, 0xa4,
+	0x4d, 0xf1, 0x6c, 0x2c, 0xc2, 0x80, 0x05, 0x28, 0x2b, 0xc0, 0x5f, 0x68, 0x14, 0xcc, 0xe7, 0x81,
+	0xdf, 0x1c, 0xce, 0x82, 0xd1, 0x95, 0x94, 0x56, 0x5c, 0xf8, 0x21, 0xa2, 0x2c, 0xe6, 0x76, 0x13,
+	0x8e, 0x46, 0xef, 0x67, 0x09, 0x69, 0xc4, 0x24, 0x0b, 0x89, 0x1f, 0x91, 0x11, 0xf3, 0x02, 0x5f,
+	0x2a, 0xb5, 0xaf, 0x0a, 0x94, 0x2c, 0x1a, 0x7a, 0x64, 0xe6, 0x7d, 0xa4, 0x6e, 0x87, 0x37, 0x47,
+	0xc7, 0x90, 0x9b, 0x52, 0xe2, 0xd2, 0xd0, 0x50, 0xaa, 0x4a, 0x5d, 0x6f, 0xed, 0x36, 0x64, 0x79,
+	0x43, 0xc8, 0x2f, 0x85, 0x84, 0x63, 0x0b, 0x3a, 0x04, 0xd5, 0x25, 0x13, 0x23, 0x2d, 0x9c, 0x7a,
+	0xe2, 0xec, 0xb6, 0x5f, 0x60, 0xce, 0xa3, 0x7d, 0xc8, 0xb1, 0xa5, 0xe3, 0xb9, 0x91, 0xa1, 0x56,
+	0xd5, 0xba, 0x86, 0xb3, 0x6c, 0x69, 0xba, 0x11, 0x7a, 0x0e, 0x25, 0xe2, 0xba, 0x1e, 0x1f, 0x84,
+	0xcc, 0x1c, 0x97, 0x30, 0x62, 0x64, 0x44, 0x87, 0x83, 0xa4, 0x43, 0x7b, 0x25, 0x77, 0x09, 0x23,
+	0xb8, 0x48, 0x1e, 0xe1, 0xda, 0x17, 0x05, 0x8a, 0x62, 0x9c, 0x0b, 0x8f, 0x4d, 0xf1, 0x85, 0x45,
+	0x19, 0xfa, 0x17, 0xb2, 0x22, 0x9c, 0x78, 0xea, 0xc2, 0xa3, 0xa9, 0xb1, 0xd4, 0xd0, 0x31, 0x6c,
+	0xb1, 0xa5, 0xf0, 0x47, 0x46, 0xba, 0xaa, 0xd6, 0xf5, 0x56, 0x29, 0xf1, 0xd9, 0x92, 0xc7, 0x2b,
+	0x03, 0x7a, 0x06, 0xa5, 0x51, 0xe0, 0xb3, 0x90, 0x8c, 0x98, 0x43, 0xaf, 0xa9, 0xcf, 0xe4, 0x16,
+	0x7a, 0x6b, 0x3f, 0xa9, 0x39, 0x8d, 0xe5, 0x1e, 0x57, 0x71, 0x71, 0xb4, 0x09, 0xa3, 0xda, 0xe7,
+	0x34, 0xec, 0xd9, 0xeb, 0xc8, 0x2d, 0x7e, 0x48, 0xd3, 0x1f, 0x07, 0xe8, 0x09, 0xe8, 0x1b, 0xa7,
+	0xf8, 0x35, 0xe6, 0x8d, 0x12, 0xbc, 0xe9, 0x43, 0xff, 0xc0, 0xb6, 0xd8, 0xc2, 0x99, 0x52, 0x6f,
+	0x32, 0x65, 0x22, 0xf4, 0x0c, 0xd6, 0x87, 0xf2, 0x2c, 0x9c, 0x42, 0x87, 0x00, 0xb1, 0x85, 0x44,
+	0x53, 0x43, 0xad, 0x2a, 0xf5, 0x6d, 0xac, 0x49, 0x03, 0x89, 0xa6, 0xe8, 0x4f, 0xbe, 0xbe, 0xe3,
+	0xf9, 0x2e, 0x5d, 0x8a, 0xc0, 0x0b, 0x38, 0xcf, 0x96, 0x26, 0x87, 0xe8, 0x3f, 0x28, 0xc9, 0x4a,
+	0xe6, 0xcd, 0x69, 0xc4, 0xc8, 0x7c, 0x61, 0x64, 0xab, 0x4a, 0x5d, 0xc5, 0x45, 0x41, 0xdb, 0x09,
+	0x8b, 0xce, 0xe0, 0x60, 0x63, 0x28, 0x47, 0x7c, 0x9e, 0x8e, 0xe7, 0x8f, 0x03, 0x23, 0x27, 0xf6,
+	0x28, 0x37, 0xe4, 0xe7, 0xbb, 0x5a, 0x17, 0xef, 0xb1, 0xdf, 0x84, 0x50, 0xbb, 0x55, 0x40, 0x5b,
+	0x47, 0x72, 0x02, 0x20, 0x3b, 0xb1, 0x9b, 0x05, 0x15, 0x89, 0x14, 0x5b, 0x7b, 0x71, 0x27, 0x7e,
+	0x71, 0xe1, 0xb4, 0x6f, 0x16, 0x14, 0x6b, 0x51, 0xf2, 0x8a, 0xfe, 0x06, 0x6d, 0xec, 0xcd, 0xa8,
+	0xe3, 0x93, 0x39, 0x15, 0x69, 0x68, 0x78, 0x8b, 0x13, 0xe7, 0x64, 0x4e, 0xd1, 0x01, 0xe4, 0x82,
+	0xf1, 0x38, 0xa2, 0x4c, 0xc4, 0x90, 0xc1, 0x31, 0xe2, 0x19, 0x0c, 0x6f, 0x18, 0x75, 0x66, 0xd4,
+	0x17, 0x19, 0x64, 0x70, 0x9e, 0xe3, 0x3e, 0xf5, 0x8f, 0x3e, 0x29, 0x90, 0xeb, 0x0e, 0x45, 0xeb,
+	0x22, 0x80, 0x79, 0xfe, 0xa6, 0xdd, 0x37, 0xbb, 0x4e, 0xb7, 0x53, 0x4e, 0xa1, 0x6d, 0xd8, 0xea,
+	0xf4, 0x07, 0xa7, 0xaf, 0x38, 0x52, 0x10, 0x82, 0xa2, 0x44, 0xe6, 0x79, 0xb7, 0x77, 0xc9, 0xb9,
+	0x34, 0xd2, 0x20, 0x6b, 0x8b, 0x57, 0x15, 0x95, 0x40, 0xb7, 0x2f, 0xd7, 0x5a, 0x06, 0xe9, 0x90,
+	0xb7, 0x06, 0x67, 0x36, 0x07, 0x59, 0xde, 0xca, 0xb2, 0xdb, 0x76, 0x8f, 0xa3, 0x1c, 0xda, 0x81,
+	0x02, 0xee, 0xb5, 0xbb, 0xce, 0x05, 0x36, 0x25, 0x95, 0x3f, 0x7a, 0x0a, 0x85, 0x47, 0x2b, 0xf3,
+	0x61, 0xce, 0xcc, 0x7e, 0xcf, 0xb1, 0xec, 0x01, 0xee, 0x95, 0x53, 0xa8, 0x00, 0x9a, 0xf5, 0xba,
+	0x1f, 0x43, 0x05, 0xe5, 0x41, 0x3d, 0x1d, 0x58, 0xe5, 0x74, 0xe7, 0xdd, 0xb7, 0xfb, 0x8a, 0x72,
+	0x77, 0x5f, 0x51, 0x7e, 0xdc, 0x57, 0x94, 0xdb, 0x87, 0x4a, 0xea, 0xee, 0xa1, 0x92, 0xfa, 0xfe,
+	0x50, 0x49, 0xc1, 0x1f, 0x41, 0x38, 0x69, 0x8c, 0xa6, 0xc4, 0xf3, 0xe7, 0xe4, 0x8a, 0x86, 0x8d,
+	0xc5, 0x50, 0x66, 0xfb, 0xb6, 0xbe, 0x41, 0x06, 0xe1, 0xa4, 0xb9, 0x86, 0xcd, 0xc5, 0xf0, 0xff,
+	0x49, 0xd0, 0xbc, 0x6e, 0xc9, 0xdf, 0xd1, 0x30, 0x27, 0xfe, 0x18, 0x27, 0x3f, 0x03, 0x00, 0x00,
+	0xff, 0xff, 0x42, 0x45, 0x4a, 0xcc, 0xa4, 0x04, 0x00, 0x00,
 }
 
 func (m *SerializedBlock) Marshal() (dAtA []byte, err error) {
@@ -375,6 +589,120 @@ func (m *BlockWithRWSet) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *TransactionStoreInfo) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *TransactionStoreInfo) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TransactionStoreInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.TransactionStoreInfo != nil {
+		{
+			size, err := m.TransactionStoreInfo.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintStore(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x32
+	}
+	if m.BlockTimestamp != 0 {
+		i = encodeVarintStore(dAtA, i, uint64(m.BlockTimestamp))
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.TxIndex != 0 {
+		i = encodeVarintStore(dAtA, i, uint64(m.TxIndex))
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.BlockHash) > 0 {
+		i -= len(m.BlockHash)
+		copy(dAtA[i:], m.BlockHash)
+		i = encodeVarintStore(dAtA, i, uint64(len(m.BlockHash)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.BlockHeight != 0 {
+		i = encodeVarintStore(dAtA, i, uint64(m.BlockHeight))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.Transaction != nil {
+		{
+			size, err := m.Transaction.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintStore(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *StoreInfo) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *StoreInfo) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *StoreInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.ByteLen != 0 {
+		i = encodeVarintStore(dAtA, i, uint64(m.ByteLen))
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.Offset != 0 {
+		i = encodeVarintStore(dAtA, i, uint64(m.Offset))
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.FileName) > 0 {
+		i -= len(m.FileName)
+		copy(dAtA[i:], m.FileName)
+		i = encodeVarintStore(dAtA, i, uint64(len(m.FileName)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.StoreType != 0 {
+		i = encodeVarintStore(dAtA, i, uint64(m.StoreType))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintStore(dAtA []byte, offset int, v uint64) int {
 	offset -= sovStore(v)
 	base := offset
@@ -434,6 +762,58 @@ func (m *BlockWithRWSet) Size() (n int) {
 			l = e.Size()
 			n += 1 + l + sovStore(uint64(l))
 		}
+	}
+	return n
+}
+
+func (m *TransactionStoreInfo) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Transaction != nil {
+		l = m.Transaction.Size()
+		n += 1 + l + sovStore(uint64(l))
+	}
+	if m.BlockHeight != 0 {
+		n += 1 + sovStore(uint64(m.BlockHeight))
+	}
+	l = len(m.BlockHash)
+	if l > 0 {
+		n += 1 + l + sovStore(uint64(l))
+	}
+	if m.TxIndex != 0 {
+		n += 1 + sovStore(uint64(m.TxIndex))
+	}
+	if m.BlockTimestamp != 0 {
+		n += 1 + sovStore(uint64(m.BlockTimestamp))
+	}
+	if m.TransactionStoreInfo != nil {
+		l = m.TransactionStoreInfo.Size()
+		n += 1 + l + sovStore(uint64(l))
+	}
+	return n
+}
+
+func (m *StoreInfo) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.StoreType != 0 {
+		n += 1 + sovStore(uint64(m.StoreType))
+	}
+	l = len(m.FileName)
+	if l > 0 {
+		n += 1 + l + sovStore(uint64(l))
+	}
+	if m.Offset != 0 {
+		n += 1 + sovStore(uint64(m.Offset))
+	}
+	if m.ByteLen != 0 {
+		n += 1 + sovStore(uint64(m.ByteLen))
 	}
 	return n
 }
@@ -767,6 +1147,358 @@ func (m *BlockWithRWSet) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipStore(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthStore
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *TransactionStoreInfo) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowStore
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TransactionStoreInfo: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TransactionStoreInfo: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Transaction", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowStore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthStore
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthStore
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Transaction == nil {
+				m.Transaction = &common.Transaction{}
+			}
+			if err := m.Transaction.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BlockHeight", wireType)
+			}
+			m.BlockHeight = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowStore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.BlockHeight |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BlockHash", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowStore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthStore
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthStore
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.BlockHash = append(m.BlockHash[:0], dAtA[iNdEx:postIndex]...)
+			if m.BlockHash == nil {
+				m.BlockHash = []byte{}
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TxIndex", wireType)
+			}
+			m.TxIndex = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowStore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TxIndex |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BlockTimestamp", wireType)
+			}
+			m.BlockTimestamp = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowStore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.BlockTimestamp |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TransactionStoreInfo", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowStore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthStore
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthStore
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TransactionStoreInfo == nil {
+				m.TransactionStoreInfo = &StoreInfo{}
+			}
+			if err := m.TransactionStoreInfo.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipStore(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthStore
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *StoreInfo) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowStore
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: StoreInfo: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: StoreInfo: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field StoreType", wireType)
+			}
+			m.StoreType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowStore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.StoreType |= DataStoreType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field FileName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowStore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthStore
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthStore
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.FileName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Offset", wireType)
+			}
+			m.Offset = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowStore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Offset |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ByteLen", wireType)
+			}
+			m.ByteLen = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowStore
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ByteLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipStore(dAtA[iNdEx:])

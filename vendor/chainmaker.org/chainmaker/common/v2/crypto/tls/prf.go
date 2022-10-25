@@ -14,6 +14,10 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+
+	bccrypto "chainmaker.org/chainmaker/common/v2/crypto"
+
+	"github.com/tjfoc/gmsm/sm3"
 )
 
 // Split a premaster secret in two as specified in RFC 4346, Section 5.
@@ -84,6 +88,10 @@ var keyExpansionLabel = []byte("key expansion")
 var clientFinishedLabel = []byte("client finished")
 var serverFinishedLabel = []byte("server finished")
 
+func prfAndHashForGM() func(result, secret, label, seed []byte) {
+	return prf12(sm3.New)
+}
+
 func prfAndHashForVersion(version uint16, suite *cipherSuite) (func(result, secret, label, seed []byte), crypto.Hash) {
 	switch version {
 	case VersionTLS10, VersionTLS11:
@@ -99,7 +107,12 @@ func prfAndHashForVersion(version uint16, suite *cipherSuite) (func(result, secr
 }
 
 func prfForVersion(version uint16, suite *cipherSuite) func(result, secret, label, seed []byte) {
-	prf, _ := prfAndHashForVersion(version, suite)
+	var prf func(result, secret, label, seed []byte)
+	if version == VersionGMSSL {
+		prf = prfAndHashForGM()
+	} else {
+		prf, _ = prfAndHashForVersion(version, suite)
+	}
 	return prf
 }
 
@@ -146,9 +159,16 @@ func newFinishedHash(version uint16, cipherSuite *cipherSuite) finishedHash {
 		buffer = []byte{}
 	}
 
-	prf, hash := prfAndHashForVersion(version, cipherSuite)
-	if hash != 0 {
-		return finishedHash{hash.New(), hash.New(), nil, nil, buffer, version, prf}
+	var prf func(result, secret, label, seed []byte)
+
+	if version == VersionGMSSL {
+		prf = prfAndHashForGM()
+		return finishedHash{sm3.New(), sm3.New(), nil, nil, buffer, version, prf}
+	} else {
+		prf, hash := prfAndHashForVersion(version, cipherSuite)
+		if hash != 0 {
+			return finishedHash{hash.New(), hash.New(), nil, nil, buffer, version, prf}
+		}
 	}
 
 	return finishedHash{sha1.New(), sha1.New(), md5.New(), md5.New(), buffer, version, prf}
@@ -188,7 +208,7 @@ func (h *finishedHash) Write(msg []byte) (n int, err error) {
 }
 
 func (h finishedHash) Sum() []byte {
-	if h.version >= VersionTLS12 {
+	if h.version >= VersionTLS12 || h.version == VersionGMSSL {
 		return h.client.Sum(nil)
 	}
 
@@ -220,16 +240,21 @@ func (h finishedHash) hashForClientCertificate(sigType uint8, hashAlg crypto.Has
 		panic("tls: handshake hash for a client certificate requested after discarding the handshake buffer")
 	}
 
-	if sigType == signatureSM2 {
-		return h.buffer
-	}
+	//if sigType == signatureSM2 {
+	//	return h.buffer
+	//}
 
 	if sigType == signatureEd25519 {
 		return h.buffer
 	}
 
 	if h.version >= VersionTLS12 {
-		hash := hashAlg.New()
+		var hash hash.Hash
+		if hashAlg == bccrypto.SM3 {
+			hash = sm3.New()
+		} else {
+			hash = hashAlg.New()
+		}
 		hash.Write(h.buffer)
 		return hash.Sum(nil)
 	}

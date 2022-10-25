@@ -19,6 +19,7 @@ import (
 	"chainmaker.org/chainmaker/sdk-go/v2/utils"
 )
 
+// CreateContractCreatePayload create user contract creation payload
 func (cc *ChainClient) CreateContractCreatePayload(contractName, version, byteCodeStringOrFilePath string,
 	runtime common.RuntimeType, kvs []*common.KeyValuePair) (*common.Payload, error) {
 
@@ -27,6 +28,7 @@ func (cc *ChainClient) CreateContractCreatePayload(contractName, version, byteCo
 		syscontract.ContractManageFunction_INIT_CONTRACT.String(), version, byteCodeStringOrFilePath, runtime, kvs)
 }
 
+// CreateContractUpgradePayload create user contract upgrade payload
 func (cc *ChainClient) CreateContractUpgradePayload(contractName, version, byteCodeStringOrFilePath string,
 	runtime common.RuntimeType, kvs []*common.KeyValuePair) (*common.Payload, error) {
 
@@ -35,16 +37,19 @@ func (cc *ChainClient) CreateContractUpgradePayload(contractName, version, byteC
 		syscontract.ContractManageFunction_UPGRADE_CONTRACT.String(), version, byteCodeStringOrFilePath, runtime, kvs)
 }
 
+// CreateContractFreezePayload create user contract freeze payload
 func (cc *ChainClient) CreateContractFreezePayload(contractName string) (*common.Payload, error) {
 	cc.logger.Debugf("[SDK] create [ContractFreeze] to be signed payload")
 	return cc.createContractManagePayload(contractName, syscontract.ContractManageFunction_FREEZE_CONTRACT.String())
 }
 
+// CreateContractUnfreezePayload create user contract unfreeze payload
 func (cc *ChainClient) CreateContractUnfreezePayload(contractName string) (*common.Payload, error) {
 	cc.logger.Debugf("[SDK] create [ContractUnfreeze] to be signed payload")
 	return cc.createContractManagePayload(contractName, syscontract.ContractManageFunction_UNFREEZE_CONTRACT.String())
 }
 
+// CreateContractRevokePayload create user contract revoke payload
 func (cc *ChainClient) CreateContractRevokePayload(contractName string) (*common.Payload, error) {
 	cc.logger.Debugf("[SDK] create [ContractRevoke] to be signed payload")
 	return cc.createContractManagePayload(contractName, syscontract.ContractManageFunction_REVOKE_CONTRACT.String())
@@ -57,8 +62,8 @@ func (cc *ChainClient) createContractManagePayload(contractName, method string) 
 			Value: []byte(contractName),
 		},
 	}
-	return cc.createPayload("", common.TxType_INVOKE_CONTRACT, syscontract.SystemContract_CONTRACT_MANAGE.String(),
-		method, kvs, defaultSeq), nil
+	return cc.CreatePayload("", common.TxType_INVOKE_CONTRACT, syscontract.SystemContract_CONTRACT_MANAGE.String(),
+		method, kvs, defaultSeq, nil), nil
 }
 
 func (cc *ChainClient) createContractManageWithByteCodePayload(contractName, method, version,
@@ -99,8 +104,8 @@ func (cc *ChainClient) createContractManageWithByteCodePayload(contractName, met
 		return nil, fmt.Errorf("use reserved word")
 	}
 
-	payload := cc.createPayload("", common.TxType_INVOKE_CONTRACT,
-		syscontract.SystemContract_CONTRACT_MANAGE.String(), method, kvs, defaultSeq)
+	payload := cc.CreatePayload("", common.TxType_INVOKE_CONTRACT,
+		syscontract.SystemContract_CONTRACT_MANAGE.String(), method, kvs, defaultSeq, nil)
 
 	payload.Parameters = append(payload.Parameters, &common.KeyValuePair{
 		Key:   syscontract.InitContract_CONTRACT_NAME.String(),
@@ -142,33 +147,85 @@ func (cc *ChainClient) checkKeyValuePair(kvs []*common.KeyValuePair) bool {
 	return true
 }
 
+// SignContractManagePayload sign user contract manage payload
 func (cc *ChainClient) SignContractManagePayload(payload *common.Payload) (*common.EndorsementEntry, error) {
 	return cc.SignPayload(payload)
 }
 
+// SendContractManageRequest send user contract manage request to node
 func (cc *ChainClient) SendContractManageRequest(payload *common.Payload, endorsers []*common.EndorsementEntry,
 	timeout int64, withSyncResult bool) (*common.TxResponse, error) {
 	return cc.sendContractRequest(payload, endorsers, timeout, withSyncResult)
 }
 
+// InvokeContract invoke contract
 func (cc *ChainClient) InvokeContract(contractName, method, txId string, kvs []*common.KeyValuePair, timeout int64,
 	withSyncResult bool) (*common.TxResponse, error) {
+	return cc.InvokeContractWithLimit(contractName, method, txId, kvs, timeout, withSyncResult, nil)
+}
+
+// InvokeContractWithLimit invoke contract with specified gas limit
+func (cc *ChainClient) InvokeContractWithLimit(contractName, method, txId string, kvs []*common.KeyValuePair,
+	timeout int64, withSyncResult bool, limit *common.Limit) (*common.TxResponse, error) {
 
 	cc.logger.Debugf("[SDK] begin to INVOKE contract, [contractName:%s]/[method:%s]/[txId:%s]/[params:%+v]",
 		contractName, method, txId, kvs)
 
-	payload := cc.createPayload(txId, common.TxType_INVOKE_CONTRACT, contractName, method, kvs, defaultSeq)
+	payload := cc.CreatePayload(txId, common.TxType_INVOKE_CONTRACT, contractName, method, kvs, defaultSeq, limit)
 
 	return cc.sendContractRequest(payload, nil, timeout, withSyncResult)
 }
 
+// InvokeContractBySigner invoke contract with specified signer.
+// use signer to sign payload if it is not nil.
+// use cc.privateKey to sign payload if signer is nil.
+func (cc *ChainClient) InvokeContractBySigner(contractName, method, txId string, kvs []*common.KeyValuePair,
+	timeout int64, withSyncResult bool, limit *common.Limit,
+	signer Signer) (*common.TxResponse, error) {
+
+	cc.logger.Debugf("[SDK] begin InvokeContractBySigner, [contractName:%s]/[method:%s]/[txId:%s]/[params:%+v]",
+		contractName, method, txId, kvs)
+
+	// construct payload
+	payload := cc.CreatePayload(txId, common.TxType_INVOKE_CONTRACT, contractName, method, kvs, defaultSeq, limit)
+
+	// construct tx req & sign
+	req, err := cc.GenerateTxRequestBySigner(payload, nil, signer)
+	if err != nil {
+		return nil, err
+	}
+
+	// send tx req
+	resp, err := cc.sendTxRequest(req, timeout)
+	if err != nil {
+		return resp, fmt.Errorf("send %s failed, %s", payload.TxType.String(), err.Error())
+	}
+
+	if resp.Code == common.TxStatusCode_SUCCESS {
+		if withSyncResult {
+			r, err := cc.getSyncResult(payload.TxId)
+			if err != nil {
+				return nil, fmt.Errorf("getSyncResult failed, %s", err.Error())
+			}
+			resp.Code = r.Result.Code
+			resp.Message = r.Result.Message
+			resp.ContractResult = r.Result.ContractResult
+			resp.TxId = payload.TxId
+			resp.TxTimestamp = r.TxTimestamp
+			resp.TxBlockHeight = r.TxBlockHeight
+		}
+	}
+	return resp, nil
+}
+
+// QueryContract query contract
 func (cc *ChainClient) QueryContract(contractName, method string, kvs []*common.KeyValuePair,
 	timeout int64) (*common.TxResponse, error) {
 
 	cc.logger.Debugf("[SDK] begin to QUERY contract, [contractName:%s]/[method:%s]/[params:%+v]",
 		contractName, method, kvs)
 
-	payload := cc.createPayload("", common.TxType_QUERY_CONTRACT, contractName, method, kvs, defaultSeq)
+	payload := cc.CreatePayload("", common.TxType_QUERY_CONTRACT, contractName, method, kvs, defaultSeq, nil)
 
 	resp, err := cc.proposalRequestWithTimeout(payload, nil, timeout)
 	if err != nil {
@@ -178,18 +235,23 @@ func (cc *ChainClient) QueryContract(contractName, method string, kvs []*common.
 	return resp, nil
 }
 
-func (cc *ChainClient) GetTxRequest(contractName, method, txId string,
-	kvs []*common.KeyValuePair) (*common.TxRequest, error) {
+// GetTxRequest build tx request, returns *common.TxRequest
+func (cc *ChainClient) GetTxRequest(contractName, method, txId string, kvs []*common.KeyValuePair) (
+	*common.TxRequest, error) {
 	if txId == "" {
-		txId = utils.GetRandTxId()
+		if cc.enableNormalKey {
+			txId = utils.GetRandTxId()
+		} else {
+			txId = utils.GetTimestampTxId()
+		}
 	}
 
 	cc.logger.Debugf("[SDK] begin to create TxRequest, [contractName:%s]/[method:%s]/[txId:%s]/[params:%+v]",
 		contractName, method, txId, kvs)
 
-	payload := cc.createPayload(txId, common.TxType_INVOKE_CONTRACT, contractName, method, kvs, defaultSeq)
+	payload := cc.CreatePayload(txId, common.TxType_INVOKE_CONTRACT, contractName, method, kvs, defaultSeq, nil)
 
-	req, err := cc.generateTxRequest(payload, nil)
+	req, err := cc.GenerateTxRequest(payload, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +259,7 @@ func (cc *ChainClient) GetTxRequest(contractName, method, txId string,
 	return req, nil
 }
 
+// SendTxRequest send tx request to node
 func (cc *ChainClient) SendTxRequest(txRequest *common.TxRequest, timeout int64,
 	withSyncResult bool) (*common.TxResponse, error) {
 
@@ -209,17 +272,16 @@ func (cc *ChainClient) SendTxRequest(txRequest *common.TxRequest, timeout int64,
 		if !withSyncResult {
 			resp.TxId = txRequest.Payload.TxId
 		} else {
-			contractResult, err := cc.getSyncResult(txRequest.Payload.TxId)
+			r, err := cc.getSyncResult(txRequest.Payload.TxId)
 			if err != nil {
-				return nil, fmt.Errorf("get sync result failed, %s", err.Error())
+				return nil, fmt.Errorf("getSyncResult failed, %s", err.Error())
 			}
-
-			if contractResult.Code != utils.SUCCESS {
-				resp.Code = common.TxStatusCode_CONTRACT_FAIL
-				resp.Message = contractResult.Message
-			}
-
-			resp.ContractResult = contractResult
+			resp.Code = r.Result.Code
+			resp.Message = r.Result.Message
+			resp.ContractResult = r.Result.ContractResult
+			resp.TxId = txRequest.Payload.TxId
+			resp.TxTimestamp = r.TxTimestamp
+			resp.TxBlockHeight = r.TxBlockHeight
 		}
 	}
 

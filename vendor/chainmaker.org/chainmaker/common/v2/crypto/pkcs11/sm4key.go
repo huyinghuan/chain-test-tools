@@ -10,6 +10,9 @@ package pkcs11
 import (
 	"crypto/rand"
 	"fmt"
+	"strconv"
+
+	"chainmaker.org/chainmaker/common/v2/crypto/hsm"
 
 	"chainmaker.org/chainmaker/common/v2/crypto/sym/util"
 
@@ -39,7 +42,16 @@ type sm4Key struct {
 }
 
 func NewSM4Key(ctx *P11Handle, keyId []byte) (bccrypto.SymmetricKey, error) {
-	obj, err := ctx.findSecretKey(keyId)
+	//find private key
+	id, err := strconv.Atoi(string(keyId))
+	if err != nil {
+		return nil, err
+	}
+	keyIdStr, err := hsm.GetHSMAdapter("").PKCS11_GetSM4KeyId(id)
+	if err != nil {
+		return nil, err
+	}
+	obj, err := ctx.findSecretKey([]byte(keyIdStr))
 	if err != nil {
 		return nil, fmt.Errorf("PKCS11 error: fail to find sm4 key [%s]", err)
 	}

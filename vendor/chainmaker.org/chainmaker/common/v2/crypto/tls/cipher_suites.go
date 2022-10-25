@@ -117,7 +117,8 @@ type keyAgreement interface {
 	// In the case that the key agreement protocol doesn't use a
 	// ServerKeyExchange message, generateServerKeyExchange can return nil,
 	// nil.
-	generateServerKeyExchange(*Config, *Certificate, *clientHelloMsg, *serverHelloMsg) (*serverKeyExchangeMsg, error)
+	generateServerKeyExchange(*Config, *Certificate, *Certificate, *clientHelloMsg, *serverHelloMsg) (*serverKeyExchangeMsg, error)
+	//generateServerKeyExchange(*Config, *Certificate, *clientHelloMsg, *serverHelloMsg) (*serverKeyExchangeMsg, error)
 	processClientKeyExchange(*Config, *Certificate, *clientKeyExchangeMsg, uint16) ([]byte, error)
 
 	// On the client side, the next two methods are called in order.
@@ -162,7 +163,7 @@ type cipherSuite struct {
 	flags  int
 	cipher func(key, iv []byte, isRead bool) interface{}
 	mac    func(version uint16, macKey []byte) macFunction
-	aead   func(key, fixedNonce []byte) aead
+	aead   func(key, fixedNonce []byte) cipher.AEAD
 }
 
 var cipherSuites = []*cipherSuite{
@@ -217,7 +218,7 @@ func selectCipherSuite(ids, supportedIDs []uint16, ok func(*cipherSuite) bool) *
 type cipherSuiteTLS13 struct {
 	id     uint16
 	keyLen int
-	aead   func(key, fixedNonce []byte) aead
+	aead   func(key, fixedNonce []byte) cipher.AEAD
 	hash   crypto.Hash
 }
 
@@ -339,7 +340,7 @@ func (f *xorNonceAEAD) Open(out, nonce, ciphertext, additionalData []byte) ([]by
 	return result, err
 }
 
-func aeadAESGCM(key, noncePrefix []byte) aead {
+func aeadAESGCM(key, noncePrefix []byte) cipher.AEAD {
 	if len(noncePrefix) != noncePrefixLength {
 		panic("tls: internal error: wrong nonce length")
 	}
@@ -357,7 +358,7 @@ func aeadAESGCM(key, noncePrefix []byte) aead {
 	return ret
 }
 
-func aeadAESGCMTLS13(key, nonceMask []byte) aead {
+func aeadAESGCMTLS13(key, nonceMask []byte) cipher.AEAD {
 	if len(nonceMask) != aeadNonceLength {
 		panic("tls: internal error: wrong nonce length")
 	}
@@ -375,7 +376,7 @@ func aeadAESGCMTLS13(key, nonceMask []byte) aead {
 	return ret
 }
 
-func aeadChaCha20Poly1305(key, nonceMask []byte) aead {
+func aeadChaCha20Poly1305(key, nonceMask []byte) cipher.AEAD {
 	if len(nonceMask) != aeadNonceLength {
 		panic("tls: internal error: wrong nonce length")
 	}

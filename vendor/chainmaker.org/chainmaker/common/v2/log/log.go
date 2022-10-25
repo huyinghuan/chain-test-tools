@@ -22,7 +22,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// 日志级别，int类型，内部接口使用常量
+//LOG_LEVEL 日志级别，int类型，内部接口使用常量
 type LOG_LEVEL int
 
 const (
@@ -40,8 +40,11 @@ const (
 	ERROR = "ERROR"
 )
 
+// GetLogLevel 根据字符串型的日志级别，返回枚举型日志级别
+// @param lvl
+// @return LOG_LEVEL
 func GetLogLevel(lvl string) LOG_LEVEL {
-	switch lvl {
+	switch strings.ToUpper(lvl) {
 	case ERROR:
 		return LEVEL_ERROR
 	case WARN:
@@ -57,7 +60,7 @@ func GetLogLevel(lvl string) LOG_LEVEL {
 
 func getZapLevel(lvl string) (*zapcore.Level, error) {
 	var zapLevel zapcore.Level
-	switch lvl {
+	switch strings.ToUpper(lvl) {
 	case ERROR:
 		zapLevel = zap.ErrorLevel
 	case WARN:
@@ -120,7 +123,7 @@ type LogConfig struct {
 	StackTraceLevel string
 }
 
-func InitSugarLogger(logConfig *LogConfig) (*zap.SugaredLogger, zap.AtomicLevel) {
+func InitSugarLogger(logConfig *LogConfig, writer ...io.Writer) (*zap.SugaredLogger, zap.AtomicLevel) {
 	var level zapcore.Level
 	switch logConfig.LogLevel {
 	case LEVEL_DEBUG:
@@ -138,12 +141,12 @@ func InitSugarLogger(logConfig *LogConfig) (*zap.SugaredLogger, zap.AtomicLevel)
 	aLevel := zap.NewAtomicLevel()
 	aLevel.SetLevel(level)
 
-	sugaredLogger := newLogger(logConfig, aLevel).Sugar()
+	sugaredLogger := newLogger(logConfig, aLevel, writer...).Sugar()
 
 	return sugaredLogger, aLevel
 }
 
-func newLogger(logConfig *LogConfig, level zap.AtomicLevel) *zap.Logger {
+func newLogger(logConfig *LogConfig, level zap.AtomicLevel, writer ...io.Writer) *zap.Logger {
 	var (
 		hook io.Writer
 		ok   bool
@@ -165,11 +168,15 @@ func newLogger(logConfig *LogConfig, level zap.AtomicLevel) *zap.Logger {
 	}
 
 	var syncer zapcore.WriteSyncer
+	syncers := []zapcore.WriteSyncer{zapcore.AddSync(hook)}
 	if logConfig.LogInConsole {
-		syncer = zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(hook))
-	} else {
-		syncer = zapcore.AddSync(hook)
+		syncers = append(syncers, zapcore.AddSync(os.Stdout))
 	}
+	for _, outSyncer := range writer {
+		syncers = append(syncers, zapcore.AddSync(outSyncer))
+	}
+
+	syncer = zapcore.NewMultiWriteSyncer(syncers...)
 
 	var encoderConfig zapcore.EncoderConfig
 	if logConfig.IsBrief {

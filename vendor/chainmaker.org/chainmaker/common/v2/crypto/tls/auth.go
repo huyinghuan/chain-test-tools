@@ -43,9 +43,6 @@ func verifyHandshakeSignature(sigType uint8, pubkey crypto.PublicKey, hashFunc c
 		if ok := pubKey.Verify(signed, sig); !ok {
 			return errors.New("verify sm2 signature error")
 		}
-		//if ok, err := pubkey.(cmcrypto.PublicKey).Verify(signed, sig); !ok || err != nil{
-		//	return errors.New("verify sm2 signature error, err = " + err.Error())
-		//}
 	case signatureEd25519:
 		pubKey, ok := pubkey.(ed25519.PublicKey)
 		if !ok {

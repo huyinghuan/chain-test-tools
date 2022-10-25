@@ -8,69 +8,115 @@ SPDX-License-Identifier: Apache-2.0
 package ca
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
+
+	cmtls "chainmaker.org/chainmaker/common/v2/crypto/tls"
+	cmx509 "chainmaker.org/chainmaker/common/v2/crypto/x509"
 
 	"golang.org/x/net/http2"
 )
 
-func GetTLSConfig(certPemPath, certKeyPath string, caPaths []string) (*tls.Config, error) {
-	var certKeyPair *tls.Certificate
-	cert, err := ioutil.ReadFile(certPemPath)
-	if err != nil {
-		return nil, fmt.Errorf("read cert file failed, %s", err.Error())
+func GetTLSConfig(certPemPath, certKeyPath string, caPaths, caCerts []string,
+	encCertPemPath, encCertKeyPath string) (*cmtls.Config, error) {
+	//single cert mode
+	_, err1 := os.Stat(encCertPemPath)
+	_, err2 := os.Stat(encCertKeyPath)
+	if errors.Is(err1, os.ErrNotExist) || errors.Is(err2, os.ErrNotExist) {
+		return getTlsConfig(certPemPath, certKeyPath, caPaths, caCerts)
 	}
 
-	key, err := ioutil.ReadFile(certKeyPath)
+	// double cert mode (gmtls1.1)
+	return getGMTlsConfig(certPemPath, certKeyPath, encCertPemPath, encCertKeyPath, caPaths, caCerts)
+}
+
+func getTlsConfig(certPemPath, certKeyPath string, caPaths, caCerts []string) (*cmtls.Config, error) {
+	certKeyPair, err := cmtls.LoadX509KeyPair(certPemPath, certKeyPath)
 	if err != nil {
-		return nil, fmt.Errorf("read cert key failed, %s", err.Error())
+		return nil, err
+	}
+	certPool, err := getCertPool(caPaths, caCerts)
+	if err != nil {
+		return nil, err
 	}
 
-	pair, err := tls.X509KeyPair(cert, key)
+	cfg := &cmtls.Config{
+		Certificates: []cmtls.Certificate{certKeyPair},
+		NextProtos:   []string{http2.NextProtoTLS},
+		ClientCAs:    certPool,
+	}
+	//set clientAuth if caCert exists
+	if certPool != nil {
+		cfg.ClientAuth = cmtls.RequireAndVerifyClientCert
+	}
+	return cfg, nil
+}
+
+func getGMTlsConfig(certPemPath, certKeyPath, encCertPemPath, encCertKeyPath string,
+	caPaths, caCerts []string) (*cmtls.Config, error) {
+	sigCert, err := cmtls.LoadX509KeyPair(certPemPath, certKeyPath)
 	if err != nil {
-		return nil, fmt.Errorf("TLS KeyPair failed, %s", err.Error())
+		return nil, err
+	}
+	encCert, err := cmtls.LoadX509KeyPair(encCertPemPath, encCertKeyPath)
+	if err != nil {
+		return nil, err
+	}
+	certPool, err := getCertPool(caPaths, caCerts)
+	if err != nil {
+		return nil, err
 	}
 
-	certKeyPair = &pair
+	cfg := &cmtls.Config{
+		GMSupport:    cmtls.NewGMSupport(),
+		Certificates: []cmtls.Certificate{sigCert, encCert},
+		NextProtos:   []string{http2.NextProtoTLS},
+		ClientCAs:    certPool,
+	}
+	//set clientAuth if caCert exists
+	if certPool != nil {
+		cfg.ClientAuth = cmtls.RequireAndVerifyClientCert
+	}
+	return cfg, nil
+}
 
+func getCertPool(caPaths, caCerts []string) (*cmx509.CertPool, error) {
+	if len(caPaths) == 0 && len(caCerts) == 0 {
+		return nil, nil
+	}
+
+	certPool := cmx509.NewCertPool()
 	if len(caPaths) > 0 {
-		caCerts, err := loadCerts(caPaths)
+		caCertPaths, err := loadCerts(caPaths)
 		if err != nil {
 			return nil, fmt.Errorf("load trust certs failed, %s", err.Error())
 		}
 
-		if len(caCerts) == 0 {
+		if len(caCertPaths) == 0 {
 			return nil, errors.New("trust certs dir is empty")
 		}
 
-		certPool := x509.NewCertPool()
-		for _, caCert := range caCerts {
-			err := addTrust(certPool, caCert)
+		for _, caCertPath := range caCertPaths {
+			err := addGMTrust(certPool, caCertPath)
 			if err != nil {
 				return nil, err
 			}
 		}
-
-		// nolint: gosec
-		return &tls.Config{
-			Certificates: []tls.Certificate{*certKeyPair},
-			NextProtos:   []string{http2.NextProtoTLS},
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			ClientCAs:    certPool,
-		}, nil
 	}
 
-	// nolint: gosec
-	return &tls.Config{
-		Certificates: []tls.Certificate{*certKeyPair},
-		NextProtos:   []string{http2.NextProtoTLS},
-	}, nil
+	for _, caCert := range caCerts {
+		//err := addTrust(certPool, caCert)
+		err := addSM2CertPool(certPool, caCert)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return certPool, nil
 }
 
-func NewTLSListener(inner net.Listener, config *tls.Config) net.Listener {
-	return tls.NewListener(inner, config)
+func NewTLSListener(inner net.Listener, config *cmtls.Config) net.Listener {
+	return cmtls.NewListener(inner, config)
 }

@@ -15,10 +15,12 @@ import (
 	"time"
 
 	"chainmaker.org/chainmaker/common/v2/ca"
+	"chainmaker.org/chainmaker/common/v2/crypto"
 	cmx509 "chainmaker.org/chainmaker/common/v2/crypto/x509"
 	apipb "chainmaker.org/chainmaker/pb-go/v2/api"
 	cmnpb "chainmaker.org/chainmaker/pb-go/v2/common"
 	confpb "chainmaker.org/chainmaker/pb-go/v2/config"
+	"chainmaker.org/chainmaker/pb-go/v2/txpool"
 	"chainmaker.org/chainmaker/sdk-go/v2/utils"
 	"github.com/Rican7/retry"
 	"github.com/Rican7/retry/strategy"
@@ -38,11 +40,12 @@ var _ ConnectionPool = (*mockConnectionPool)(nil)
 var _mockServer = &mockRpcNodeServer{}
 
 type mockConnectionPool struct {
-	connections                    []*networkClient
-	logger                         utils.Logger
-	userKeyBytes                   []byte
-	userCrtBytes                   []byte
-	rpcClientMaxReceiveMessageSize int
+	connections       []*networkClient
+	logger            utils.Logger
+	userKeyBytes      []byte
+	userCrtBytes      []byte
+	rpcMaxRecvMsgSize int
+	rpcMaxSendMsgSize int
 }
 
 func newMockChainClient(serverTxResponse *cmnpb.TxResponse, serverTxError error,
@@ -58,39 +61,89 @@ func newMockChainClient(serverTxResponse *cmnpb.TxResponse, serverTxError error,
 	}
 
 	_mockServer.txResponse = serverTxResponse
-	_mockServer.txErr = serverTxError
+	_mockServer.err = serverTxError
 
-	return &ChainClient{
+	var hashType crypto.HashType
+	var publicKey crypto.PublicKey
+	var pkBytes []byte
+	var pkPem string
+	if conf.authType == PermissionedWithKey || conf.authType == Public {
+		hashType = crypto.HashAlgoMap[conf.crypto.hash]
+		publicKey = conf.userPk
+		pkPem, err = publicKey.String()
+		if err != nil {
+			return nil, err
+		}
+
+		pkBytes = []byte(pkPem)
+	} else {
+		hashType, err = cmx509.GetHashFromSignatureAlgorithm(conf.userCrt.SignatureAlgorithm)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	cc := &ChainClient{
 		pool:            pool,
 		logger:          conf.logger,
 		chainId:         conf.chainId,
 		orgId:           conf.orgId,
+		alias:           conf.alias,
 		userCrtBytes:    conf.userSignCrtBytes,
 		userCrt:         conf.userCrt,
 		privateKey:      conf.privateKey,
 		archiveConfig:   conf.archiveConfig,
 		rpcClientConfig: conf.rpcClientConfig,
-		authType:        conf.authType,
-	}, nil
+		pkcs11Config:    conf.pkcs11Config,
+
+		publicKey: publicKey,
+		hashType:  hashType,
+		authType:  conf.authType,
+		pkBytes:   pkBytes,
+
+		retryLimit:    conf.retryLimit,
+		retryInterval: conf.retryInterval,
+
+		enableNormalKey:             conf.enableNormalKey,
+		enableTxResultDispatcher:    conf.enableTxResultDispatcher,
+		enableSyncCanonicalTxResult: conf.enableSyncCanonicalTxResult,
+		ConfigModel:                 conf.ConfigModel,
+	}
+
+	// 启动 异步订阅交易结果
+	if cc.enableTxResultDispatcher {
+		cc.txResultDispatcher = newTxResultDispatcher(cc)
+		go cc.txResultDispatcher.start()
+	} else if cc.enableSyncCanonicalTxResult {
+		cc.canonicalTxFetcherPools, err = newMockCanonicalTxFetcherPools(conf)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return cc, nil
 }
 
 func newMockConnPool(config *ChainClientConfig) (*mockConnectionPool, error) {
 	pool := &mockConnectionPool{
-		logger:                         config.logger,
-		userKeyBytes:                   config.userKeyBytes,
-		userCrtBytes:                   config.userCrtBytes,
-		rpcClientMaxReceiveMessageSize: config.rpcClientConfig.rpcClientMaxReceiveMessageSize,
+		logger:            config.logger,
+		userKeyBytes:      config.userKeyBytes,
+		userCrtBytes:      config.userCrtBytes,
+		rpcMaxRecvMsgSize: config.rpcClientConfig.rpcClientMaxReceiveMessageSize * 1024 * 1024,
+		rpcMaxSendMsgSize: config.rpcClientConfig.rpcClientMaxSendMessageSize * 1024 * 1024,
 	}
 
 	for idx, node := range config.nodeList {
 		for i := 0; i < node.connCnt; i++ {
 			cli := &networkClient{
-				nodeAddr:    node.addr,
-				useTLS:      node.useTLS,
-				caPaths:     node.caPaths,
-				caCerts:     node.caCerts,
-				tlsHostName: node.tlsHostName,
-				ID:          fmt.Sprintf("%v-%v-%v", idx, node.addr, node.tlsHostName),
+				nodeAddr:          node.addr,
+				useTLS:            node.useTLS,
+				caPaths:           node.caPaths,
+				caCerts:           node.caCerts,
+				tlsHostName:       node.tlsHostName,
+				ID:                fmt.Sprintf("%v-%v-%v", idx, node.addr, node.tlsHostName),
+				rpcMaxRecvMsgSize: pool.rpcMaxRecvMsgSize,
+				rpcMaxSendMsgSize: pool.rpcMaxSendMsgSize,
 			}
 			pool.connections = append(pool.connections, cli)
 		}
@@ -102,10 +155,39 @@ func newMockConnPool(config *ChainClientConfig) (*mockConnectionPool, error) {
 	return pool, nil
 }
 
+func newMockCanonicalTxFetcherPools(config *ChainClientConfig) (map[string]ConnectionPool, error) {
+	var pools = make(map[string]ConnectionPool)
+	for idx, node := range config.nodeList {
+		pool := &mockConnectionPool{
+			logger:            config.logger,
+			userKeyBytes:      config.userKeyBytes,
+			userCrtBytes:      config.userCrtBytes,
+			rpcMaxRecvMsgSize: config.rpcClientConfig.rpcClientMaxReceiveMessageSize * 1024 * 1024,
+			rpcMaxSendMsgSize: config.rpcClientConfig.rpcClientMaxSendMessageSize * 1024 * 1024,
+		}
+		for i := 0; i < node.connCnt; i++ {
+			cli := &networkClient{
+				nodeAddr:          node.addr,
+				useTLS:            node.useTLS,
+				caPaths:           node.caPaths,
+				caCerts:           node.caCerts,
+				tlsHostName:       node.tlsHostName,
+				ID:                fmt.Sprintf("%v-%v-%v", idx, node.addr, node.tlsHostName),
+				rpcMaxRecvMsgSize: pool.rpcMaxRecvMsgSize,
+				rpcMaxSendMsgSize: pool.rpcMaxSendMsgSize,
+			}
+			pool.connections = append(pool.connections, cli)
+		}
+		// 打散，用作负载均衡
+		pool.connections = shuffle(pool.connections)
+		pools[node.addr] = pool
+	}
+	return pools, nil
+}
+
 func (pool *mockConnectionPool) initGRPCConnect(nodeAddr string, useTLS bool, caPaths, caCerts []string,
 	tlsHostName string) (*grpc.ClientConn, error) {
 	var tlsClient ca.CAClient
-	maxCallRecvMsgSize := pool.rpcClientMaxReceiveMessageSize * 1024 * 1024
 	if useTLS {
 		if len(caCerts) != 0 {
 			tlsClient = ca.CAClient{
@@ -130,11 +212,11 @@ func (pool *mockConnectionPool) initGRPCConnect(nodeAddr string, useTLS bool, ca
 			return nil, err
 		}
 		return grpc.Dial("", grpc.WithTransportCredentials(*c),
-			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize)),
+			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(pool.rpcMaxRecvMsgSize)),
 			grpc.WithContextDialer(dialer(useTLS, caPaths, caCerts)))
 	}
 	return grpc.Dial("", grpc.WithInsecure(),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize)),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(pool.rpcMaxRecvMsgSize)),
 		grpc.WithContextDialer(dialer(useTLS, caPaths, caCerts)))
 }
 
@@ -211,12 +293,15 @@ func (pool *mockConnectionPool) Close() error {
 
 type mockRpcNodeServer struct {
 	apipb.UnimplementedRpcNodeServer
-	txResponse *cmnpb.TxResponse
-	txErr      error
+	txResponse                 *cmnpb.TxResponse
+	getPoolStatusResp          *txpool.TxPoolStatus
+	getTxIdsByTypeAndStageResp *txpool.GetTxIdsByTypeAndStageResponse
+	getTxsInPoolByTxIdsResp    *txpool.GetTxsInPoolByTxIdsResponse
+	err                        error
 }
 
 func (s *mockRpcNodeServer) SendRequest(ctx context.Context, req *cmnpb.TxRequest) (*cmnpb.TxResponse, error) {
-	return s.txResponse, s.txErr
+	return s.txResponse, s.err
 }
 
 func (s *mockRpcNodeServer) Subscribe(req *cmnpb.TxRequest, server apipb.RpcNode_SubscribeServer) error {
@@ -241,6 +326,19 @@ func (s *mockRpcNodeServer) CheckNewBlockChainConfig(ctx context.Context,
 	return &confpb.CheckNewBlockChainConfigResponse{
 		Code: 0,
 	}, nil
+}
+
+func (s *mockRpcNodeServer) GetPoolStatus(ctx context.Context,
+	req *txpool.GetPoolStatusRequest) (*txpool.TxPoolStatus, error) {
+	return s.getPoolStatusResp, s.err
+}
+func (s *mockRpcNodeServer) GetTxIdsByTypeAndStage(ctx context.Context,
+	req *txpool.GetTxIdsByTypeAndStageRequest) (*txpool.GetTxIdsByTypeAndStageResponse, error) {
+	return s.getTxIdsByTypeAndStageResp, s.err
+}
+func (s *mockRpcNodeServer) GetTxsInPoolByTxIds(ctx context.Context,
+	req *txpool.GetTxsInPoolByTxIdsRequest) (*txpool.GetTxsInPoolByTxIdsResponse, error) {
+	return s.getTxsInPoolByTxIdsResp, s.err
 }
 
 func dialer(useTLS bool, caPaths, caCerts []string) func(context.Context, string) (net.Conn, error) {

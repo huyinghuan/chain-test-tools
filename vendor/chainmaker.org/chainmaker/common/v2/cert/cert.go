@@ -74,7 +74,7 @@ func CreatePrivKey(keyType crypto.KeyType, keyPath, keyFile string, isTLS bool) 
 	var privKeyPEM string
 	if P11Context != nil && P11Context.enable && !isTLS {
 		var keySpecBytes []byte
-		keySpecBytes, key, err = CreateP11Key(P11Context.handle, P11Context.keyType, P11Context.keyId)
+		keySpecBytes, key, err = CreateP11Key(P11Context.handle, P11Context.keyType, P11Context.keyId, P11Context.keyPwd)
 		if err != nil {
 			return nil, fmt.Errorf("generate pkcs11 key pair [%s] failed, %s", algoName, err.Error())
 		}
@@ -201,9 +201,9 @@ type IssueCertificateConfig struct {
 	CertFileName          string
 	ExpireYear            int32
 	Sans                  []string
-	Uuid                  string
-	KeyUsages             []x509.KeyUsage
-	ExtKeyUsages          []x509.ExtKeyUsage
+	//Uuid                  string
+	KeyUsages    []x509.KeyUsage
+	ExtKeyUsages []x509.ExtKeyUsage
 }
 
 // IssueCertificate - issue certification
@@ -225,15 +225,15 @@ func IssueCertificate(cfg *IssueCertificateConfig) error {
 
 	dnsName, ipAddrs := dealSANS(cfg.Sans)
 
-	var extraExtensions []pkix.Extension
-	if cfg.Uuid != "" {
-		extSubjectAltName := pkix.Extension{}
-		extSubjectAltName.Id = bcx509.OidNodeId
-		extSubjectAltName.Critical = false
-		extSubjectAltName.Value = []byte(cfg.Uuid)
+	//var extraExtensions []pkix.Extension
+	// if cfg.Uuid != "" {
+	// 	extSubjectAltName := pkix.Extension{}
+	// 	extSubjectAltName.Id = bcx509.OidNodeId
+	// 	extSubjectAltName.Critical = false
+	// 	extSubjectAltName.Value = []byte(cfg.Uuid)
 
-		extraExtensions = append(extraExtensions, extSubjectAltName)
-	}
+	// 	extraExtensions = append(extraExtensions, extSubjectAltName)
+	// }
 
 	var keyUsages x509.KeyUsage
 	if len(cfg.KeyUsages) != 0 {
@@ -258,8 +258,8 @@ func IssueCertificate(cfg *IssueCertificateConfig) error {
 		ExtKeyUsage:           cfg.ExtKeyUsages,
 		IPAddresses:           ipAddrs,
 		DNSNames:              dnsName,
-		ExtraExtensions:       extraExtensions,
-		Subject:               csr.Subject,
+		//ExtraExtensions:       extraExtensions,
+		Subject: csr.Subject,
 	}
 
 	if issuerCert.SubjectKeyId != nil {

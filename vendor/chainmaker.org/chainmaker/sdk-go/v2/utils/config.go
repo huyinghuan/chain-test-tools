@@ -14,9 +14,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config global ChainClientConfigModel
-var Config *ChainClientConfigModel
-
 type cryptoModel struct {
 	Hash string `mapstructure:"hash"`
 }
@@ -44,12 +41,17 @@ type archiveConfigModel struct {
 }
 
 type rpcClientConfigModel struct {
-	MaxRecvMsgSize int `mapstructure:"max_receive_message_size"`
+	MaxRecvMsgSize int   `mapstructure:"max_receive_message_size"`
+	MaxSendMsgSize int   `mapstructure:"max_send_message_size"`
+	SendTxTimeout  int64 `mapstructure:"send_tx_timeout"`
+	GetTxTimeout   int64 `mapstructure:"get_tx_timeout"`
 }
 
 type pkcs11ConfigModel struct {
 	// 是否开启pkcs11
 	Enabled bool `mapstructure:"enabled"`
+	// interface type of lib, only support pkcs11 and sdf
+	Type string `mapstructure:"type"`
 	// path to the .so file of pkcs11 interface
 	Library string `mapstructure:"library"`
 	// label for the slot to be used
@@ -69,11 +71,21 @@ type chainClientConfigModel struct {
 	OrgId string `mapstructure:"org_id"`
 	// 客户端用户私钥路径
 	UserKeyFilePath string `mapstructure:"user_key_file_path"`
+	// 客户端用户私钥密码
+	UserKeyPwd string `mapstructure:"user_key_pwd"`
 	// 客户端用户证书路径
 	UserCrtFilePath string `mapstructure:"user_crt_file_path"`
+	// 客户端用户加密私钥路径
+	UserEncKeyFilePath string `mapstructure:"user_enc_key_file_path"`
+	// 客户端用户加密私钥密码
+	UserEncKeyPwd string `mapstructure:"user_enc_key_pwd"`
+	// 客户端用户加密证书路径
+	UserEncCrtFilePath string `mapstructure:"user_enc_crt_file_path"`
 	// 证书模式下：客户端用户交易签名私钥路径(若未设置，将使用user_key_file_path)
 	// 公钥模式下：客户端用户交易签名的私钥路径(必须设置)
 	UserSignKeyFilePath string `mapstructure:"user_sign_key_file_path"`
+	// 客户端用户交易签名私钥密码
+	UserSignKeyPwd string `mapstructure:"user_sign_key_pwd"`
 	// 客户端用户交易签名证书路径(若未设置，将使用user_crt_file_path)
 	UserSignCrtFilePath string `mapstructure:"user_sign_crt_file_path"`
 	// 同步交易结果模式下，轮训获取交易结果时的最大轮训次数
@@ -92,30 +104,36 @@ type chainClientConfigModel struct {
 	AuthType string `mapstructure:"auth_type"`
 	// 需要额外指定的算法类型，当前只用于指定公钥身份模式下的Hash算法
 	Crypto *cryptoModel `mapstructure:"crypto"`
+	// 别名
+	Alias string `mapstructure:"alias"`
+	// 默认使用 TimestampKey ，如果 EnableNormalKey 设置为 true 则使用 NormalKey
+	EnableNormalKey bool `mapstructure:"enable_normal_key"`
 }
 
+// ChainClientConfigModel define ChainClientConfigModel
 type ChainClientConfigModel struct {
 	ChainClientConfig chainClientConfigModel `mapstructure:"chain_client"`
 }
 
-func InitConfig(confPath string) error {
+// InitConfig init config from config file path
+func InitConfig(confPath string) (*ChainClientConfigModel, error) {
 	var (
 		err       error
 		confViper *viper.Viper
 	)
 
 	if confViper, err = initViper(confPath); err != nil {
-		return fmt.Errorf("Load sdk config failed, %s", err)
+		return nil, fmt.Errorf("Load sdk config failed, %s", err)
 	}
 
-	Config = &ChainClientConfigModel{}
-	if err = confViper.Unmarshal(&Config); err != nil {
-		return fmt.Errorf("Unmarshal config file failed, %s", err)
+	configModel := &ChainClientConfigModel{}
+	if err = confViper.Unmarshal(&configModel); err != nil {
+		return nil, fmt.Errorf("Unmarshal config file failed, %s", err)
 	}
 
-	Config.ChainClientConfig.AuthType = strings.ToLower(Config.ChainClientConfig.AuthType)
+	configModel.ChainClientConfig.AuthType = strings.ToLower(configModel.ChainClientConfig.AuthType)
 
-	return nil
+	return configModel, nil
 }
 
 func initViper(confPath string) (*viper.Viper, error) {

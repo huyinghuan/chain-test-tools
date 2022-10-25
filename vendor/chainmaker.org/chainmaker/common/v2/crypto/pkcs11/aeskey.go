@@ -10,6 +10,9 @@ package pkcs11
 import (
 	"crypto/rand"
 	"fmt"
+	"strconv"
+
+	"chainmaker.org/chainmaker/common/v2/crypto/hsm"
 
 	"chainmaker.org/chainmaker/common/v2/crypto/sym/util"
 
@@ -42,9 +45,19 @@ type aesKey struct {
 }
 
 func NewAESKey(ctx *P11Handle, keyId []byte) (bccrypto.SymmetricKey, error) {
-	obj, err := ctx.findSecretKey(keyId)
+	//find private key
+	id, err := strconv.Atoi(string(keyId))
 	if err != nil {
-		return nil, fmt.Errorf("PKCS11 error: fail to find aes key [%s]", err)
+		return nil, err
+	}
+	keyIdStr, err := hsm.GetHSMAdapter("").PKCS11_GetAESKeyId(id)
+	if err != nil {
+		return nil, err
+	}
+
+	obj, err := ctx.findSecretKey([]byte(keyIdStr))
+	if err != nil {
+		return nil, errors.WithMessagef(err, "PKCS11 error: fail to find aes key, keyId = %s", keyIdStr)
 	}
 
 	sk := aesKey{p11Ctx: ctx,

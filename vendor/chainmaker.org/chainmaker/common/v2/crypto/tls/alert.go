@@ -42,6 +42,13 @@ const (
 	alertUnsupportedExtension   alert = 110
 	alertUnrecognizedName       alert = 112
 	alertNoApplicationProtocol  alert = 120
+	//GMT0024
+	alertUnsupporttedSite2Site alert = 200
+	alertNoArea                alert = 201
+	alertUnsupportedAreaType   alert = 202
+	alertBadIBCParam           alert = 203
+	alertUnsupportedIBCParam   alert = 204
+	alertIdentityNeed          alert = 205
 )
 
 var alertText = map[alert]string{
@@ -72,6 +79,13 @@ var alertText = map[alert]string{
 	alertUnsupportedExtension:   "unsupported extension",
 	alertUnrecognizedName:       "unrecognized name",
 	alertNoApplicationProtocol:  "no application protocol",
+	//GMT0024
+	alertUnsupporttedSite2Site: "unsupported site2site",
+	alertNoArea:                "no area",
+	alertUnsupportedAreaType:   "unsupported area type",
+	alertBadIBCParam:           "bad ibc param",
+	alertUnsupportedIBCParam:   "unsupport ibc param",
+	alertIdentityNeed:          "need ibc identity",
 }
 
 func (e alert) String() string {

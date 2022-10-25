@@ -1020,16 +1020,15 @@ func (c *Certificate) VerifyHostname(h string) error {
 
 	lowered := toLowerCaseASCII(h)
 
-	if c.commonNameAsHostname() {
-		if matchHostnames(toLowerCaseASCII(c.Subject.CommonName), lowered) {
-			return nil
-		}
-	} else {
+	if len(c.DNSNames) > 0 {
 		for _, match := range c.DNSNames {
 			if matchHostnames(toLowerCaseASCII(match), lowered) {
 				return nil
 			}
 		}
+		// If Subject Alt Name is given, we ignore the common name.
+	} else if matchHostnames(toLowerCaseASCII(c.Subject.CommonName), lowered) {
+		return nil
 	}
 
 	return HostnameError{c, h}

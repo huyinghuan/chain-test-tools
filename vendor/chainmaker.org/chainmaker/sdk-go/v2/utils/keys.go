@@ -1,5 +1,4 @@
 /*
-Copyright (C) BABEC. All rights reserved.
 Copyright (C) THL A29 Limited, a Tencent company. All rights reserved.
 
 SPDX-License-Identifier: Apache-2.0
@@ -10,14 +9,17 @@ package utils
 //nolint
 const (
 	// System Block Contract keys
-	KeyBlockContractWithRWSet   = "withRWSet"
-	KeyBlockContractBlockHash   = "blockHash"
-	KeyBlockContractBlockHeight = "blockHeight"
-	KeyBlockContractTxId        = "txId"
+	KeyBlockContractWithRWSet        = "withRWSet"
+	KeyBlockContractBlockHash        = "blockHash"
+	KeyBlockContractBlockHeight      = "blockHeight"
+	KeyBlockContractTxId             = "txId"
+	KeyBlockContractTruncateValueLen = "truncateValueLen"
+	KeyBlockContractTruncateModel    = "truncateModel"
 
 	// System Chain Config Contract keys
 	KeyChainConfigContractRoot              = "root"
 	KeyChainConfigContractOrgId             = "org_id"
+	KeyChainConfigAddrType                  = "addr_type"
 	KeyChainConfigContractNodeId            = "node_id"
 	KeyChainConfigContractNewNodeId         = "new_node_id"
 	KeyChainConfigContractNodeIds           = "node_ids"
@@ -30,12 +32,14 @@ const (
 	// CoreConfig keys
 	KeyTxSchedulerTimeout         = "tx_scheduler_timeout"
 	KeyTxSchedulerValidateTimeout = "tx_scheduler_validate_timeout"
+	KeyEnableOptimizeChargeGas    = "enable_optimize_charge_gas"
 
 	// BlockConfig keys
 	KeyTxTimeOut       = "tx_timeout"
 	KeyBlockTxCapacity = "block_tx_capacity"
 	KeyBlockSize       = "block_size"
 	KeyBlockInterval   = "block_interval"
+	KeyTxParamterSize  = "tx_parameter_size"
 
 	// CertManage keys
 	KeyCertHashes = "cert_hashes"
@@ -70,6 +74,16 @@ const (
 	KeyPubkey      = "pubkey"
 	KeyPubkeyRole  = "role"
 	KeyPubkeyOrgId = "org_id"
+
+	// Gas management
+	KeyGasAddressKey       = "address_key"
+	KeyGasPublicKey        = "public_key"
+	KeyGasBatchRecharge    = "batch_recharge"
+	KeyGasBalancePublicKey = "balance_public_key"
+	KeyGasChargePublicKey  = "charge_public_key"
+	KeyGasChargeGasAmount  = "charge_gas_amount"
+	KeyGasFrozenPublicKey  = "frozen_public_key"
+	KeySetInvokeBaseGas    = "set_invoke_base_gas"
 )
 
 //nolint

@@ -34,37 +34,43 @@ type CAClient struct {
 	CertBytes  []byte
 	KeyBytes   []byte
 	Logger     log.LoggerInterface
+
+	//for gmtls1.1
+	EncCertFile  string
+	EncKeyFile   string
+	EncCertBytes []byte
+	EncKeyBytes  []byte
 }
 
 func (c *CAClient) GetCredentialsByCA() (*credentials.TransportCredentials, error) {
 	var (
-		cert   tls.Certificate
-		gmCert cmtls.Certificate
-		err    error
+		cert, encCert cmtls.Certificate
+		err, encErr   error
 	)
 
 	if c.CertBytes != nil && c.KeyBytes != nil {
-		cert, err = tls.X509KeyPair(c.CertBytes, c.KeyBytes)
+		cert, err = cmtls.X509KeyPair(c.CertBytes, c.KeyBytes)
 	} else {
-		cert, err = tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
-	}
-	if err == nil {
-		return c.getCredentialsByCA(&cert)
+		cert, err = cmtls.LoadX509KeyPair(c.CertFile, c.KeyFile)
 	}
 
-	if c.CertBytes != nil && c.KeyBytes != nil {
-		gmCert, err = cmtls.X509KeyPair(c.CertBytes, c.KeyBytes)
+	if c.EncCertBytes != nil && c.EncKeyBytes != nil {
+		encCert, encErr = cmtls.X509KeyPair(c.EncCertBytes, c.EncKeyBytes)
 	} else {
-		gmCert, err = cmtls.LoadX509KeyPair(c.CertFile, c.KeyFile)
+		encCert, encErr = cmtls.LoadX509KeyPair(c.EncCertFile, c.EncKeyFile)
 	}
-	if err == nil {
-		return c.getGMCredentialsByCA(&gmCert)
+
+	//gmtls
+	if err == nil && encErr == nil {
+		return c.getGMCredentialsByCA(&cert, &encCert)
+	} else if err == nil && encErr != nil {
+		return c.getGMCredentialsByCA(&cert, nil)
 	}
 
 	return nil, fmt.Errorf("load X509 key pair failed, %s", err.Error())
 }
 
-// nolint: gosec
+// nolint: unused, gosec
 func (c *CAClient) getCredentialsByCA(cert *tls.Certificate) (*credentials.TransportCredentials, error) {
 	certPool := x509.NewCertPool()
 	if len(c.CaCerts) != 0 {
@@ -85,6 +91,7 @@ func (c *CAClient) getCredentialsByCA(cert *tls.Certificate) (*credentials.Trans
 	return &clientTLS, nil
 }
 
+// nolint unused
 func (c *CAClient) appendCertsToCertPool(certPool *x509.CertPool) {
 	for _, caCert := range c.CaCerts {
 		if caCert != "" {
@@ -93,6 +100,7 @@ func (c *CAClient) appendCertsToCertPool(certPool *x509.CertPool) {
 	}
 }
 
+// nolint unused
 func (c *CAClient) addTrustCertsToCertPool(certPool *x509.CertPool) error {
 	certs, err := loadCerts(c.CaPaths)
 	if err != nil {
@@ -114,7 +122,7 @@ func (c *CAClient) addTrustCertsToCertPool(certPool *x509.CertPool) error {
 	return nil
 }
 
-func (c *CAClient) getGMCredentialsByCA(cert *cmtls.Certificate) (*credentials.TransportCredentials, error) {
+func (c *CAClient) getGMCredentialsByCA(cert, encCert *cmtls.Certificate) (*credentials.TransportCredentials, error) {
 	certPool := cmx509.NewCertPool()
 	if len(c.CaCerts) != 0 {
 		c.appendCertsToSM2CertPool(certPool)
@@ -124,12 +132,19 @@ func (c *CAClient) getGMCredentialsByCA(cert *cmtls.Certificate) (*credentials.T
 		}
 	}
 
-	clientTLS := cmcred.NewTLS(&cmtls.Config{
+	cfg := &cmtls.Config{
 		Certificates:       []cmtls.Certificate{*cert},
 		ServerName:         c.ServerName,
 		RootCAs:            certPool,
 		InsecureSkipVerify: false,
-	})
+	}
+
+	if encCert != nil {
+		cfg.GMSupport = cmtls.NewGMSupport()
+		cfg.Certificates = append(cfg.Certificates, *encCert)
+	}
+
+	clientTLS := cmcred.NewTLS(cfg)
 
 	return &clientTLS, nil
 }

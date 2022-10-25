@@ -17,8 +17,16 @@
 package evmutils
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rsa"
+	"encoding/asn1"
 	"encoding/hex"
+	"fmt"
 
+	"chainmaker.org/chainmaker/common/v2/crypto"
+
+	"github.com/tjfoc/gmsm/sm2"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -34,6 +42,9 @@ func (a *Address) SetBytes(b []byte) {
 		b = b[len(b)-AddressLength:]
 	}
 	copy(a[AddressLength-len(b):], b)
+}
+func (a *Address) String() string {
+	return hex.EncodeToString(a[:])
 }
 
 var (
@@ -142,7 +153,7 @@ func LeftPadBytes(slice []byte, l int) []byte {
 	return padded
 }
 
-// MakeAddressFromHex any hex str make a evm.Int
+// MakeAddressFromHex any hex str make an evm.Int
 func MakeAddressFromHex(str string) (*Int, error) {
 	data, err := FromHex(str)
 	if err != nil {
@@ -151,26 +162,26 @@ func MakeAddressFromHex(str string) (*Int, error) {
 	return MakeAddress(data), nil
 }
 
-// MakeAddressFromString any str make a evm.Int
+// MakeAddressFromString any str make an evm.Int
 func MakeAddressFromString(str string) (*Int, error) {
 	return MakeAddress([]byte(str)), nil
 }
 
-// MakeAddress any byte make a evm.Int
+// MakeAddress any byte make an evm.Int
 func MakeAddress(data []byte) *Int {
 	address := Keccak256(data)
 	addr := hex.EncodeToString(address)[24:]
 	return FromHexString(addr)
 }
 
-// BytesToAddress any byte set to a evm address
+// BytesToAddress any byte set to an evm address
 func BytesToAddress(b []byte) Address {
 	var a Address
 	a.SetBytes(b)
 	return a
 }
 
-// StringToAddress any string make a evm address
+// StringToAddress any string make an evm address
 func StringToAddress(s string) (Address, error) {
 	addrInt, err := MakeAddressFromString(s)
 	if err != nil {
@@ -180,8 +191,21 @@ func StringToAddress(s string) (Address, error) {
 	return BigToAddress(addrInt), nil
 }
 
-// HexToAddress any hex make a evm address
+// HexToAddress direct convert hex to an evm address,直接将十六进制字符串转换为Address类型
 func HexToAddress(s string) (Address, error) {
+	addrInt, err := FromHex(s)
+	if err != nil {
+		var a Address
+		return a, err
+	}
+	return BytesToAddress(addrInt), nil
+}
+
+// MakeHexToAddress 基于十六进制数据，经过Hash计算获得一个EVM地址
+// @param s
+// @return Address
+// @return error
+func MakeHexToAddress(s string) (Address, error) {
 	addrInt, err := MakeAddressFromHex(s)
 	if err != nil {
 		var a Address
@@ -207,4 +231,27 @@ func FromHex(s string) ([]byte, error) {
 
 func Has0xPrefix(str string) bool {
 	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
+}
+
+//MarshalPublicKey serialize pk to bytes
+func MarshalPublicKey(pk crypto.PublicKey) (pkBytes []byte, err error) {
+	pub := pk.ToStandardKey()
+	switch k := pub.(type) {
+	case *sm2.PublicKey:
+		pkBytes = elliptic.Marshal(k.Curve, k.X, k.Y)
+	case *ecdsa.PublicKey:
+		pkBytes = elliptic.Marshal(k.Curve, k.X, k.Y)
+	case *rsa.PublicKey:
+		pkBytes, err = asn1.Marshal(rsaPublicKeyASN{
+			N: k.N,
+			E: k.E,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("fail to marshal RSA public key: %v", err)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported public key type [%T]", k)
+	}
+
+	return pkBytes, nil
 }

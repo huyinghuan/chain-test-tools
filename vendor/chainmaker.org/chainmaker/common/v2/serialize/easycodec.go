@@ -382,9 +382,10 @@ func EasyUnmarshal(data []byte) []*EasyCodecItem {
 		easyValueType = EasyValueType((binaryUint32Unmarshal(buf, uint32DataBytes)))
 
 		valueLength = int32(binaryUint32Unmarshal(buf, uint32DataBytes))
-		if valueLength > MAX_VALUE_LEN {
-			return items
-		}
+		// move 'length verify' from sdk to vm
+		//if valueLength > MAX_VALUE_LEN {
+		//	return items
+		//}
 
 		var easyCodecItem EasyCodecItem
 

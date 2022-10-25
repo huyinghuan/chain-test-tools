@@ -3,20 +3,19 @@ Copyright (C) THL A29 Limited, a Tencent company. All rights reserved.
 
 SPDX-License-Identifier: Apache-2.0
 */
+
 package chainmaker_sdk_go
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/Rican7/retry"
-	"github.com/Rican7/retry/strategy"
-
-	"chainmaker.org/chainmaker/common/v2/crypto"
 	bcx509 "chainmaker.org/chainmaker/common/v2/crypto/x509"
 	"chainmaker.org/chainmaker/pb-go/v2/accesscontrol"
 	"chainmaker.org/chainmaker/pb-go/v2/common"
 	"chainmaker.org/chainmaker/sdk-go/v2/utils"
+	"github.com/Rican7/retry"
+	"github.com/Rican7/retry/strategy"
 )
 
 const (
@@ -28,7 +27,29 @@ const (
 	defaultSeq = 0
 )
 
-func (cc *ChainClient) getSyncResult(txId string) (*common.ContractResult, error) {
+// GetSyncResult get sync result of tx
+func (cc *ChainClient) GetSyncResult(txId string) (*common.Result, error) {
+	r, err := cc.getSyncResult(txId)
+	if err != nil {
+		return nil, err
+	}
+	return r.Result, nil
+}
+
+// getSyncResult get sync result of tx
+// @param txId
+// @return *txResult
+// @return error
+func (cc *ChainClient) getSyncResult(txId string) (*txResult, error) {
+	if cc.enableTxResultDispatcher {
+		return cc.asyncTxResult(txId)
+	} else if cc.enableSyncCanonicalTxResult {
+		return cc.syncCanonicalTxResult(txId)
+	}
+	return cc.pollingTxResult(txId)
+}
+
+func (cc *ChainClient) pollingTxResult(txId string) (*txResult, error) {
 	var (
 		txInfo *common.TransactionInfo
 		err    error
@@ -54,7 +75,26 @@ func (cc *ChainClient) getSyncResult(txId string) (*common.ContractResult, error
 		return nil, fmt.Errorf("get result by txId [%s] failed, %+v", txId, txInfo)
 	}
 
-	return txInfo.Transaction.Result.ContractResult, nil
+	return &txResult{
+		Result:        txInfo.Transaction.Result,
+		TxTimestamp:   txInfo.Transaction.Payload.Timestamp,
+		TxBlockHeight: txInfo.BlockHeight,
+	}, nil
+}
+
+func (cc *ChainClient) asyncTxResult(txId string) (*txResult, error) {
+	txResultC := cc.txResultDispatcher.register(txId)
+	defer cc.txResultDispatcher.unregister(txId)
+
+	timeout := time.Duration(cc.retryInterval*cc.retryLimit) * time.Millisecond
+	ticker := time.NewTicker(timeout)
+	defer ticker.Stop()
+	select {
+	case r := <-txResultC:
+		return r, nil
+	case <-ticker.C:
+		return nil, fmt.Errorf("get transaction result timed out, timeout=%s", timeout)
+	}
 }
 
 func (cc *ChainClient) sendContractRequest(payload *common.Payload, endorsers []*common.EndorsementEntry,
@@ -67,21 +107,31 @@ func (cc *ChainClient) sendContractRequest(payload *common.Payload, endorsers []
 
 	if resp.Code == common.TxStatusCode_SUCCESS {
 		if withSyncResult {
-			contractResult, err := cc.getSyncResult(payload.TxId)
+			r, err := cc.getSyncResult(payload.TxId)
 			if err != nil {
-				return nil, fmt.Errorf("get sync result failed, %s", err.Error())
+				return nil, fmt.Errorf("getSyncResult failed, %s", err.Error())
 			}
-			resp.ContractResult = contractResult
+			resp.Code = r.Result.Code
+			resp.Message = r.Result.Message
+			resp.ContractResult = r.Result.ContractResult
+			resp.TxId = payload.TxId
+			resp.TxTimestamp = r.TxTimestamp
+			resp.TxBlockHeight = r.TxBlockHeight
 		}
 	}
 
 	return resp, nil
 }
 
-func (cc *ChainClient) createPayload(txId string, txType common.TxType, contractName, method string,
-	kvs []*common.KeyValuePair, seq uint64) *common.Payload {
+// CreatePayload create unsigned payload
+func (cc *ChainClient) CreatePayload(txId string, txType common.TxType, contractName, method string,
+	kvs []*common.KeyValuePair, seq uint64, limit *common.Limit) *common.Payload {
 	if txId == "" {
-		txId = utils.GetRandTxId()
+		if cc.enableNormalKey {
+			txId = utils.GetRandTxId()
+		} else {
+			txId = utils.GetTimestampTxId()
+		}
 	}
 
 	payload := utils.NewPayload(
@@ -93,11 +143,13 @@ func (cc *ChainClient) createPayload(txId string, txType common.TxType, contract
 		utils.WithMethod(method),
 		utils.WithParameters(kvs),
 		utils.WithSequence(seq),
+		utils.WithLimit(limit),
 	)
 
 	return payload
 }
 
+// SignPayload sign payload, returns *common.EndorsementEntry
 func (cc *ChainClient) SignPayload(payload *common.Payload) (*common.EndorsementEntry, error) {
 	var (
 		sender    *accesscontrol.Member
@@ -123,7 +175,7 @@ func (cc *ChainClient) SignPayload(payload *common.Payload) (*common.Endorsement
 		}
 
 	} else {
-		signBytes, err = utils.SignPayloadWithHashType(cc.privateKey, crypto.HashAlgoMap[cc.hashType], payload)
+		signBytes, err = utils.SignPayloadWithHashType(cc.privateKey, cc.hashType, payload)
 		if err != nil {
 			return nil, fmt.Errorf("SignPayload failed, %s", err.Error())
 		}

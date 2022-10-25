@@ -8,7 +8,9 @@ SPDX-License-Identifier: Apache-2.0
 package evmutils
 
 import (
+	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rsa"
 	"encoding/asn1"
 	"encoding/hex"
 	"encoding/pem"
@@ -16,13 +18,11 @@ import (
 	"io/ioutil"
 	"math/big"
 
+	"github.com/tjfoc/gmsm/sm2"
 	"github.com/tjfoc/gmsm/sm3"
 
 	"chainmaker.org/chainmaker/common/v2/crypto"
 	"chainmaker.org/chainmaker/common/v2/crypto/asym"
-	"chainmaker.org/chainmaker/common/v2/crypto/asym/ecdsa"
-	"chainmaker.org/chainmaker/common/v2/crypto/asym/rsa"
-	"chainmaker.org/chainmaker/common/v2/crypto/asym/sm2"
 	bcx509 "chainmaker.org/chainmaker/common/v2/crypto/x509"
 )
 
@@ -39,28 +39,9 @@ type rsaPublicKeyASN struct {
 	E int
 }
 
-// ZXAddressFromPublicKey computes the address of the given public key object in Zhi Xin Lian format
-func ZXAddressFromPublicKey(pk crypto.PublicKey) (string, error) {
-	var pkBytes []byte
-	var err error
-	switch k := pk.(type) {
-	case *sm2.PublicKey:
-		pkBytes = elliptic.Marshal(k.K.Curve, k.K.X, k.K.Y)
-	case *ecdsa.PublicKey:
-		pkBytes = elliptic.Marshal(k.K.Curve, k.K.X, k.K.Y)
-	case *rsa.PublicKey:
-		pkBytes, err = asn1.Marshal(rsaPublicKeyASN{
-			N: k.K.N,
-			E: k.K.E,
-		})
-		if err != nil {
-			return "", fmt.Errorf("fail to marshal RSA public key: %v", err)
-		}
-	default:
-		return "", fmt.Errorf("unsupported public key type [%T]", k)
-	}
+func ZXAddress(data []byte) (string, error) {
 	sm3Hash := sm3.New()
-	_, err = sm3Hash.Write(pkBytes)
+	_, err := sm3Hash.Write(data)
 	if err != nil {
 		return "", err
 	}
@@ -71,6 +52,42 @@ func ZXAddressFromPublicKey(pk crypto.PublicKey) (string, error) {
 	addrBytes := pkDgst[:ZXAddrSuffixLength]
 	addrHex := hex.EncodeToString(addrBytes)
 	return ZXAddrPrefix + addrHex, nil
+}
+
+// ZXAddressFromPublicKey computes the address of the given public key object in Zhi Xin Lian format
+func ZXAddressFromPublicKey(pk crypto.PublicKey) (string, error) {
+	var pkBytes []byte
+	var err error
+	pub := pk.ToStandardKey()
+	switch k := pub.(type) {
+	case *sm2.PublicKey:
+		pkBytes = elliptic.Marshal(k.Curve, k.X, k.Y)
+	case *ecdsa.PublicKey:
+		pkBytes = elliptic.Marshal(k.Curve, k.X, k.Y)
+	case *rsa.PublicKey:
+		pkBytes, err = asn1.Marshal(rsaPublicKeyASN{
+			N: k.N,
+			E: k.E,
+		})
+		if err != nil {
+			return "", fmt.Errorf("fail to marshal RSA public key: %v", err)
+		}
+	default:
+		return "", fmt.Errorf("unsupported public key type [%T]", k)
+	}
+	//sm3Hash := sm3.New()
+	//_, err = sm3Hash.Write(pkBytes)
+	//if err != nil {
+	//	return "", err
+	//}
+	//pkDgst := sm3Hash.Sum(nil)
+	//if len(pkDgst) <= ZXAddrSuffixLength {
+	//	return "", fmt.Errorf("invalid public key")
+	//}
+	//addrBytes := pkDgst[:ZXAddrSuffixLength]
+	//addrHex := hex.EncodeToString(addrBytes)
+	//return ZXAddrPrefix + addrHex, nil
+	return ZXAddress(pkBytes)
 }
 
 // ZXAddressFromPublicKeyDER computes the address in Zhi Xin Lian format from a public key DER

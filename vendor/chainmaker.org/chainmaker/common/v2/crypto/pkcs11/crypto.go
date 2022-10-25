@@ -27,7 +27,7 @@ func (p11 *P11Handle) GenerateRandom(length int) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("PKCS11 error: fail to get session [%s]", err)
 	}
-	defer p11.returnSession(session)
+	defer p11.returnSession(err, session)
 
 	return p11.ctx.GenerateRandom(session, length)
 }
@@ -38,7 +38,7 @@ func (p11 *P11Handle) Decrypt(obj pkcs11.ObjectHandle, mech *pkcs11.Mechanism, c
 	if err != nil {
 		return nil, fmt.Errorf("PKCS11 error: fail to get session [%s]", err)
 	}
-	defer p11.returnSession(session)
+	defer p11.returnSession(err, session)
 
 	err = p11.ctx.DecryptInit(session, []*pkcs11.Mechanism{mech}, obj)
 	if err != nil {
@@ -57,7 +57,7 @@ func (p11 *P11Handle) Sign(obj pkcs11.ObjectHandle, mech *pkcs11.Mechanism, msg 
 	if err != nil {
 		return nil, fmt.Errorf("PKCS11 error: fail to get session [%s]", err)
 	}
-	defer p11.returnSession(session)
+	defer p11.returnSession(err, session)
 
 	err = p11.ctx.SignInit(session, []*pkcs11.Mechanism{mech}, obj)
 	if err != nil {
@@ -76,7 +76,7 @@ func (p11 *P11Handle) Verify(obj pkcs11.ObjectHandle, mech *pkcs11.Mechanism, ms
 	if err != nil {
 		return fmt.Errorf("PKCS11 error: fail to get session [%s]", err)
 	}
-	defer p11.returnSession(session)
+	defer p11.returnSession(err, session)
 
 	err = p11.ctx.VerifyInit(session, []*pkcs11.Mechanism{mech}, obj)
 	if err != nil {
@@ -95,7 +95,7 @@ func (p11 *P11Handle) Encrypt(obj pkcs11.ObjectHandle, mech *pkcs11.Mechanism, p
 	if err != nil {
 		return nil, fmt.Errorf("PKCS11 error: fail to get session [%s]", err)
 	}
-	defer p11.returnSession(session)
+	defer p11.returnSession(err, session)
 
 	err = p11.ctx.EncryptInit(session, []*pkcs11.Mechanism{mech}, obj)
 	if err != nil {
@@ -115,7 +115,7 @@ func (p11 *P11Handle) GenKeyPair(mech *pkcs11.Mechanism, privAttrs,
 	if err != nil {
 		return nil, nil, fmt.Errorf("PKCS11 error: fail to get session [%s]", err)
 	}
-	defer p11.returnSession(session)
+	defer p11.returnSession(err, session)
 
 	pubHandle, privHandle, err := p11.ctx.GenerateKeyPair(session, []*pkcs11.Mechanism{mech}, pubAttrs, privAttrs)
 	if err != nil {
@@ -130,7 +130,7 @@ func (p11 *P11Handle) GenerateKey(mech *pkcs11.Mechanism, attrs []*pkcs11.Attrib
 	if err != nil {
 		return nil, fmt.Errorf("PKCS11 error: fail to get session [%s]", err)
 	}
-	defer p11.returnSession(session)
+	defer p11.returnSession(err, session)
 
 	keyHandle, err := p11.ctx.GenerateKey(session, []*pkcs11.Mechanism{mech}, attrs)
 	if err != nil {
@@ -172,7 +172,7 @@ func (p11 *P11Handle) ExportRSAPublicKey(id []byte) (*rsa.PublicKey, error) {
 // ExportECDSAPublicKey export a ecdsa/sm2 public key of pkcs11 ecdsa/sm2 private key
 func (p11 *P11Handle) ExportECDSAPublicKey(id []byte, keyType P11KeyType) (interface{}, error) {
 	template := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, nil),
+		pkcs11.NewAttribute(pkcs11.CKA_EC_PARAMS, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_EC_POINT, nil),
 		//pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil),
 		//pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_KEY_INFO, nil), //PKCS#11 specification v2.40 support!
@@ -212,7 +212,7 @@ func (p11 *P11Handle) getSecretKeySize(obj pkcs11.ObjectHandle) (int, error) {
 	if err != nil {
 		return 0, errors.WithMessage(err, "failed to get pkcs11 session")
 	}
-	defer p11.returnSession(session)
+	defer p11.returnSession(err, session)
 
 	//CKA_VALUE_LEN
 	template := []*pkcs11.Attribute{

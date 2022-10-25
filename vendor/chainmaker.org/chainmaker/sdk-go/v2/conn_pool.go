@@ -21,6 +21,7 @@ import (
 	"github.com/Rican7/retry/strategy"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/keepalive"
 )
 
 const (
@@ -30,6 +31,7 @@ const (
 
 var _ ConnectionPool = (*ClientConnectionPool)(nil)
 
+// ConnectionPool grpc connection pool interface
 type ConnectionPool interface {
 	initGRPCConnect(nodeAddr string, useTLS bool, caPaths, caCerts []string, tlsHostName string) (*grpc.ClientConn, error)
 	getClient() (*networkClient, error)
@@ -40,14 +42,16 @@ type ConnectionPool interface {
 
 // 客户端连接结构定义
 type networkClient struct {
-	rpcNode     api.RpcNodeClient
-	conn        *grpc.ClientConn
-	nodeAddr    string
-	useTLS      bool
-	caPaths     []string
-	caCerts     []string
-	tlsHostName string
-	ID          string
+	rpcNode           api.RpcNodeClient
+	conn              *grpc.ClientConn
+	nodeAddr          string
+	useTLS            bool
+	caPaths           []string
+	caCerts           []string
+	tlsHostName       string
+	ID                string
+	rpcMaxRecvMsgSize int
+	rpcMaxSendMsgSize int
 }
 
 func (cli *networkClient) sendRequestWithTimeout(txReq *common.TxRequest, timeout int64) (*common.TxResponse, error) {
@@ -58,31 +62,39 @@ func (cli *networkClient) sendRequestWithTimeout(txReq *common.TxRequest, timeou
 
 // ClientConnectionPool 客户端连接池结构定义
 type ClientConnectionPool struct {
-	connections                    []*networkClient
-	logger                         utils.Logger
-	userKeyBytes                   []byte
-	userCrtBytes                   []byte
-	rpcClientMaxReceiveMessageSize int
+	connections       []*networkClient
+	logger            utils.Logger
+	userKeyBytes      []byte
+	userCrtBytes      []byte
+	userEncKeyBytes   []byte
+	userEncCrtBytes   []byte
+	rpcMaxRecvMsgSize int
+	rpcMaxSendMsgSize int
 }
 
 // NewConnPool 创建连接池
 func NewConnPool(config *ChainClientConfig) (*ClientConnectionPool, error) {
 	pool := &ClientConnectionPool{
-		logger:                         config.logger,
-		userKeyBytes:                   config.userKeyBytes,
-		userCrtBytes:                   config.userCrtBytes,
-		rpcClientMaxReceiveMessageSize: config.rpcClientConfig.rpcClientMaxReceiveMessageSize,
+		logger:            config.logger,
+		userKeyBytes:      config.userKeyBytes,
+		userCrtBytes:      config.userCrtBytes,
+		userEncKeyBytes:   config.userEncKeyBytes,
+		userEncCrtBytes:   config.userEncCrtBytes,
+		rpcMaxRecvMsgSize: config.rpcClientConfig.rpcClientMaxReceiveMessageSize * 1024 * 1024,
+		rpcMaxSendMsgSize: config.rpcClientConfig.rpcClientMaxSendMessageSize * 1024 * 1024,
 	}
 
 	for idx, node := range config.nodeList {
 		for i := 0; i < node.connCnt; i++ {
 			cli := &networkClient{
-				nodeAddr:    node.addr,
-				useTLS:      node.useTLS,
-				caPaths:     node.caPaths,
-				caCerts:     node.caCerts,
-				tlsHostName: node.tlsHostName,
-				ID:          fmt.Sprintf("%v-%v-%v", idx, node.addr, node.tlsHostName),
+				nodeAddr:          node.addr,
+				useTLS:            node.useTLS,
+				caPaths:           node.caPaths,
+				caCerts:           node.caCerts,
+				tlsHostName:       node.tlsHostName,
+				ID:                fmt.Sprintf("%v-%v-%v", idx, node.addr, node.tlsHostName),
+				rpcMaxRecvMsgSize: pool.rpcMaxRecvMsgSize,
+				rpcMaxSendMsgSize: pool.rpcMaxSendMsgSize,
 			}
 			pool.connections = append(pool.connections, cli)
 		}
@@ -94,27 +106,66 @@ func NewConnPool(config *ChainClientConfig) (*ClientConnectionPool, error) {
 	return pool, nil
 }
 
+// NewCanonicalTxFetcherPools 创建连接池
+func NewCanonicalTxFetcherPools(config *ChainClientConfig) (map[string]ConnectionPool, error) {
+	var pools = make(map[string]ConnectionPool)
+	for idx, node := range config.nodeList {
+		pool := &ClientConnectionPool{
+			logger:            config.logger,
+			userKeyBytes:      config.userKeyBytes,
+			userCrtBytes:      config.userCrtBytes,
+			rpcMaxRecvMsgSize: config.rpcClientConfig.rpcClientMaxReceiveMessageSize * 1024 * 1024,
+			rpcMaxSendMsgSize: config.rpcClientConfig.rpcClientMaxSendMessageSize * 1024 * 1024,
+		}
+		for i := 0; i < node.connCnt; i++ {
+			cli := &networkClient{
+				nodeAddr:          node.addr,
+				useTLS:            node.useTLS,
+				caPaths:           node.caPaths,
+				caCerts:           node.caCerts,
+				tlsHostName:       node.tlsHostName,
+				ID:                fmt.Sprintf("%v-%v-%v", idx, node.addr, node.tlsHostName),
+				rpcMaxRecvMsgSize: pool.rpcMaxRecvMsgSize,
+				rpcMaxSendMsgSize: pool.rpcMaxSendMsgSize,
+			}
+			pool.connections = append(pool.connections, cli)
+		}
+		// 打散，用作负载均衡
+		pool.connections = shuffle(pool.connections)
+		pools[node.addr] = pool
+	}
+	return pools, nil
+}
+
 // 初始化GPRC客户端连接
 func (pool *ClientConnectionPool) initGRPCConnect(nodeAddr string, useTLS bool, caPaths, caCerts []string,
 	tlsHostName string) (*grpc.ClientConn, error) {
+	var kacp = keepalive.ClientParameters{
+		Time:                10 * time.Second, // send pings every 10 seconds if there is no activity
+		Timeout:             time.Second,      // wait 1 second for ping ack before considering the connection dead
+		PermitWithoutStream: true,             // send pings even without active streams
+	}
 	var tlsClient ca.CAClient
-	maxCallRecvMsgSize := pool.rpcClientMaxReceiveMessageSize * 1024 * 1024
 	if useTLS {
 		if len(caCerts) != 0 {
 			tlsClient = ca.CAClient{
-				ServerName: tlsHostName,
-				CaCerts:    caCerts,
-				CertBytes:  pool.userCrtBytes,
-				KeyBytes:   pool.userKeyBytes,
-				Logger:     pool.logger,
+				ServerName:   tlsHostName,
+				CaCerts:      caCerts,
+				CertBytes:    pool.userCrtBytes,
+				KeyBytes:     pool.userKeyBytes,
+				EncCertBytes: pool.userEncCrtBytes,
+				EncKeyBytes:  pool.userEncKeyBytes,
+				Logger:       pool.logger,
 			}
 		} else {
 			tlsClient = ca.CAClient{
-				ServerName: tlsHostName,
-				CaPaths:    caPaths,
-				CertBytes:  pool.userCrtBytes,
-				KeyBytes:   pool.userKeyBytes,
-				Logger:     pool.logger,
+				ServerName:   tlsHostName,
+				CaPaths:      caPaths,
+				CertBytes:    pool.userCrtBytes,
+				KeyBytes:     pool.userKeyBytes,
+				EncCertBytes: pool.userEncCrtBytes,
+				EncKeyBytes:  pool.userEncKeyBytes,
+				Logger:       pool.logger,
 			}
 		}
 
@@ -122,11 +173,25 @@ func (pool *ClientConnectionPool) initGRPCConnect(nodeAddr string, useTLS bool, 
 		if err != nil {
 			return nil, err
 		}
-		return grpc.Dial(nodeAddr, grpc.WithTransportCredentials(*c),
-			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize)))
+		return grpc.Dial(
+			nodeAddr,
+			grpc.WithTransportCredentials(*c),
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(pool.rpcMaxRecvMsgSize),
+				grpc.MaxCallSendMsgSize(pool.rpcMaxSendMsgSize),
+			),
+			grpc.WithKeepaliveParams(kacp),
+		)
 	}
-	return grpc.Dial(nodeAddr, grpc.WithInsecure(),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxCallRecvMsgSize)))
+	return grpc.Dial(
+		nodeAddr,
+		grpc.WithInsecure(),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(pool.rpcMaxRecvMsgSize),
+			grpc.MaxCallSendMsgSize(pool.rpcMaxSendMsgSize),
+		),
+		grpc.WithKeepaliveParams(kacp),
+	)
 }
 
 // 获取空闲的可用客户端连接对象

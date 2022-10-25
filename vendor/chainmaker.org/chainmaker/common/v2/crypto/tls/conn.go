@@ -231,7 +231,7 @@ func (hc *halfConn) explicitNonceLen() int {
 		return c.explicitNonceLen()
 	case cbcMode:
 		// TLS 1.1 introduced a per-record explicit IV to fix the BEAST attack.
-		if hc.version >= VersionTLS11 {
+		if hc.version >= VersionTLS11 || hc.version == VersionGMSSL {
 			return c.BlockSize()
 		}
 		return 0
@@ -1009,7 +1009,9 @@ func (c *Conn) readHandshake() (interface{}, error) {
 			m = new(certificateMsg)
 		}
 	case typeCertificateRequest:
-		if c.vers == VersionTLS13 {
+		if c.config.GMSupport != nil {
+			m = &certificateRequestMsgGM{}
+		} else if c.vers == VersionTLS13 {
 			m = new(certificateRequestMsgTLS13)
 		} else {
 			m = &certificateRequestMsg{
@@ -1099,7 +1101,7 @@ func (c *Conn) Write(b []byte) (int, error) {
 	// https://www.imperialviolet.org/2012/01/15/beastfollowup.html
 
 	var m int
-	if len(b) > 1 && c.vers == VersionTLS10 {
+	if len(b) > 1 && c.vers <= VersionTLS10 {
 		if _, ok := c.out.cipher.(cipher.BlockMode); ok {
 			n, err := c.writeRecordLocked(recordTypeApplicationData, b[:1])
 			if err != nil {
@@ -1340,7 +1342,16 @@ func (c *Conn) Handshake() error {
 	if c.isClient {
 		c.handshakeErr = c.clientHandshake()
 	} else {
-		c.handshakeErr = c.serverHandshake()
+		if c.config.GMSupport == nil {
+			// TLS Only
+			c.handshakeErr = c.serverHandshake()
+		} else if c.config.GMSupport.IsAutoSwitchMode() {
+			//  GMSSL/TLS Auto switch
+			c.handshakeErr = c.serverHandshakeAutoSwitch()
+		} else {
+			// GMSSL Only
+			c.handshakeErr = c.serverHandshakeGM()
+		}
 	}
 	if c.handshakeErr == nil {
 		c.handshakes++

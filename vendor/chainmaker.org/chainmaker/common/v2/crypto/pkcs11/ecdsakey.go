@@ -11,6 +11,9 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"io"
+	"strconv"
+
+	"chainmaker.org/chainmaker/common/v2/crypto/hsm"
 
 	bccrypto "chainmaker.org/chainmaker/common/v2/crypto"
 	bcecdsa "chainmaker.org/chainmaker/common/v2/crypto/asym/ecdsa"
@@ -30,7 +33,7 @@ func (e ecdsaPrivateKey) Public() crypto.PublicKey {
 }
 
 func (e ecdsaPrivateKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
-	return e.priv.Sign(digest)
+	return e.priv.SignWithOpts(digest, &bccrypto.SignOpts{Hash: bccrypto.HASH_TYPE_SM3})
 }
 
 // p11EcdsaPrivateKey represents pkcs11 ecdsa/sm2 private key
@@ -49,14 +52,28 @@ func NewP11ECDSAPrivateKey(p11 *P11Handle, keyId []byte, keyType P11KeyType) (bc
 		return nil, errors.New("Invalid parameter, p11 or keyId is nil")
 	}
 
-	obj, err := p11.findPrivateKey(keyId)
+	//find private key
+	id, err := strconv.Atoi(string(keyId))
 	if err != nil {
-		return nil, errors.WithMessagef(err, "failed to find private key, keyId = %s", string(keyId))
+		return nil, err
+	}
+	keyIdStr, err := hsm.GetHSMAdapter("").PKCS11_GetSM2KeyId(id, true)
+	if err != nil {
+		return nil, err
+	}
+	obj, err := p11.findPrivateKey([]byte(keyIdStr))
+	if err != nil {
+		return nil, errors.WithMessagef(err, "failed to find private key, keyId = %s", keyIdStr)
 	}
 
-	pubKey, err := p11.ExportECDSAPublicKey(keyId, keyType)
+	//export public key
+	keyIdStr, err = hsm.GetHSMAdapter("").PKCS11_GetSM2KeyId(id, false)
 	if err != nil {
-		return nil, errors.WithMessagef(err, "New ecdsa PrivateKey failed")
+		return nil, err
+	}
+	pubKey, err := p11.ExportECDSAPublicKey([]byte(keyIdStr), keyType)
+	if err != nil {
+		return nil, errors.WithMessagef(err, "failed to export public key, keyId = %s", keyIdStr)
 	}
 
 	var bcPubKey bccrypto.PublicKey
@@ -103,7 +120,12 @@ func (sk *p11EcdsaPrivateKey) Sign(data []byte) ([]byte, error) {
 	switch sk.Type() {
 	case bccrypto.SM2:
 		// test needed to verify correctness
-		mech = CKM_SM3_SM2_APPID1_DER
+		//mech = CKM_SM3_SM2_APPID1_DER
+		//mech = CKM_SM3_SM2
+		mech = hsm.GetHSMAdapter("").PKCS11_GetSM3SM2CKM()
+		if mech == 0 {
+			mech = CKM_SM3_SM2
+		}
 	case bccrypto.ECC_Secp256k1, bccrypto.ECC_NISTP256, bccrypto.ECC_NISTP384, bccrypto.ECC_NISTP521:
 		mech = pkcs11.CKM_ECDSA
 	}

@@ -144,7 +144,14 @@ func (c *Conn) clientHandshake() (err error) {
 	// need to be reset.
 	c.didResume = false
 
-	hello, ecdheParams, err := c.makeClientHello()
+	var hello *clientHelloMsg
+	var ecdheParams ecdheParameters
+	if c.config.GMSupport != nil {
+		c.vers = VersionGMSSL
+		hello, err = makeClientHelloGM(c.config)
+	} else {
+		hello, ecdheParams, err = c.makeClientHello()
+	}
 	if err != nil {
 		return err
 	}
@@ -164,23 +171,38 @@ func (c *Conn) clientHandshake() (err error) {
 		}()
 	}
 
-	if _, err := c.writeRecord(recordTypeHandshake, hello.marshal()); err != nil {
-		return err
-	}
+	var serverHello *serverHelloMsg
+	if c.config.GMSupport != nil {
+		if session != nil {
+			hello.sessionTicket = session.sessionTicket
+			// A random session ID is used to detect when the
+			// server accepted the ticket and is resuming a session
+			// (see RFC 5077).
+			hello.sessionId = make([]byte, 16)
+			if _, err := io.ReadFull(c.config.rand(), hello.sessionId); err != nil {
+				return errors.New("tls: short read from Rand: " + err.Error())
+			}
+		}
+	} else {
+		if _, err := c.writeRecord(recordTypeHandshake, hello.marshal()); err != nil {
+			return err
+		}
 
-	msg, err := c.readHandshake()
-	if err != nil {
-		return err
-	}
+		msg, err := c.readHandshake()
+		if err != nil {
+			return err
+		}
 
-	serverHello, ok := msg.(*serverHelloMsg)
-	if !ok {
-		c.sendAlert(alertUnexpectedMessage)
-		return unexpectedMessageError(serverHello, msg)
-	}
+		ok := false
+		serverHello, ok = msg.(*serverHelloMsg)
+		if !ok {
+			c.sendAlert(alertUnexpectedMessage)
+			return unexpectedMessageError(serverHello, msg)
+		}
 
-	if err := c.pickTLSVersion(serverHello); err != nil {
-		return err
+		if err := c.pickTLSVersion(serverHello); err != nil {
+			return err
+		}
 	}
 
 	if c.vers == VersionTLS13 {
@@ -198,23 +220,39 @@ func (c *Conn) clientHandshake() (err error) {
 		return hs.handshake()
 	}
 
-	hs := &clientHandshakeState{
-		c:           c,
-		serverHello: serverHello,
-		hello:       hello,
-		session:     session,
-	}
+	if c.config.GMSupport != nil {
+		hs := &clientHandshakeStateGM{
+			c:       c,
+			hello:   hello,
+			session: session,
+			//serverHello: serverHello,
+		}
+		if err = hs.handshake(); err != nil {
+			return err
+		}
+		// If we had a successful handshake and hs.session is different from
+		// the one already cached - cache a new one.
+		if cacheKey != "" && hs.session != nil && session != hs.session {
+			c.config.ClientSessionCache.Put(cacheKey, hs.session)
+		}
+	} else {
 
-	if err := hs.handshake(); err != nil {
-		return err
-	}
+		hs := &clientHandshakeState{
+			c:           c,
+			serverHello: serverHello,
+			hello:       hello,
+			session:     session,
+		}
 
-	// If we had a successful handshake and hs.session is different from
-	// the one already cached - cache a new one.
-	if cacheKey != "" && hs.session != nil && session != hs.session {
-		c.config.ClientSessionCache.Put(cacheKey, hs.session)
+		if err := hs.handshake(); err != nil {
+			return err
+		}
+		// If we had a successful handshake and hs.session is different from
+		// the one already cached - cache a new one.
+		if cacheKey != "" && hs.session != nil && session != hs.session {
+			c.config.ClientSessionCache.Put(cacheKey, hs.session)
+		}
 	}
-
 	return nil
 }
 
@@ -563,7 +601,9 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 	}
 
 	if chainToSend != nil && len(chainToSend.Certificate) > 0 {
-		certVerify := &certificateVerifyMsg{}
+		certVerify := &certificateVerifyMsg{
+			hasSignatureAlgorithm: c.vers >= VersionTLS12,
+		}
 
 		key, ok := chainToSend.PrivateKey.(crypto.Signer)
 		if !ok {
@@ -573,7 +613,7 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 
 		var sigType uint8
 		var sigHash crypto.Hash
-		if c.vers >= VersionTLS12 {
+		if c.vers >= VersionTLS12 || c.vers == VersionGMSSL {
 			signatureAlgorithm, err := selectSignatureScheme(c.vers, chainToSend, certReq.supportedSignatureAlgorithms)
 			if err != nil {
 				c.sendAlert(alertIllegalParameter)

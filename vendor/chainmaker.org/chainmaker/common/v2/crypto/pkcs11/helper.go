@@ -19,7 +19,7 @@ func (p11 *P11Handle) findObjects(template []*pkcs11.Attribute, max int) ([]pkcs
 	if err != nil {
 		return nil, fmt.Errorf("PKCS11 error: fail to get session [%s]", err)
 	}
-	defer p11.returnSession(session)
+	defer p11.returnSession(err, session)
 
 	if err = p11.ctx.FindObjectsInit(session, template); err != nil {
 		return nil, err
@@ -130,9 +130,9 @@ func (p11 *P11Handle) getAttributes(id []byte, template []*pkcs11.Attribute) ([]
 	if err != nil {
 		return nil, fmt.Errorf("PKCS11 error: fail to get session [%s]", err)
 	}
-	defer p11.returnSession(session)
+	defer p11.returnSession(err, session)
 
-	obj, err := p11.findPrivateKey(id)
+	obj, err := p11.findPublicKey(id)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (p11 *P11Handle) getAttributes(id []byte, template []*pkcs11.Attribute) ([]
 //	if err != nil {
 //		return nil, fmt.Errorf("PKCS11 error: fail to get session [%s]", err)
 //	}
-//	defer p11.returnSession(session)
+//	defer p11.returnSession(err, session)
 //
 //	obj, err := p11.findPublicKey(id)
 //	if err != nil {

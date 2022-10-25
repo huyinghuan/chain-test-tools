@@ -106,8 +106,10 @@ func NewPrivateKey(p11 *P11Handle, keyId string, keyType bccrypto.KeyType) (bccr
 	return privKey, err
 }
 
+// nolint
 var nextId uint32
 
+// nolint
 func incNextId() uint32 {
 	return atomic.AddUint32(&nextId, 1)
 }
@@ -134,11 +136,6 @@ func convertToP11KeyType(keyType bccrypto.KeyType) P11KeyType {
 func NewSecretKey(p11 *P11Handle, keyId string, keyType bccrypto.KeyType) (bccrypto.SymmetricKey, error) {
 	if p11 == nil || len(keyId) == 0 {
 		return nil, errors.New("Invalid parameter, p11 or keyId is nil")
-	}
-
-	_, err := p11.findSecretKey([]byte(keyId))
-	if err != nil {
-		return nil, errors.WithMessagef(err, "failed to find secret key by keyId = %s", keyId)
 	}
 
 	kType := convertToP11KeyType(keyType)
@@ -226,7 +223,7 @@ func GenKeyPair(p11 *P11Handle, keyId string, keyType bccrypto.KeyType, opts *Ge
 		return NewP11ECDSAPrivateKey(p11, []byte(keyId), kType)
 	case ECDSA:
 		publicKeyTemplate := []*pkcs11.Attribute{
-			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_ECDSA),
+			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
 			pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
 			pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
@@ -234,14 +231,14 @@ func GenKeyPair(p11 *P11Handle, keyId string, keyType bccrypto.KeyType, opts *Ge
 			pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, opts.CurveParams),
 		}
 		privateKeyTemplate := []*pkcs11.Attribute{
-			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_ECDSA),
+			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_EC),
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
 			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
 			pkcs11.NewAttribute(pkcs11.CKA_LABEL, []byte(keyId)),
 			pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, opts.CurveParams),
 		}
-		mech := pkcs11.NewMechanism(pkcs11.CKM_ECDSA_KEY_PAIR_GEN, nil)
+		mech := pkcs11.NewMechanism(pkcs11.CKM_EC_KEY_PAIR_GEN, nil)
 		_, _, err := p11.GenKeyPair(mech, privateKeyTemplate, publicKeyTemplate)
 		if err != nil {
 			return nil, errors.WithMessage(err, "failed to generate pkcs11 ecdsa key")

@@ -23,18 +23,19 @@ import (
 // serverHandshakeState contains details of a server handshake in progress.
 // It's discarded once the handshake has completed.
 type serverHandshakeState struct {
-	c            *Conn
-	clientHello  *clientHelloMsg
-	hello        *serverHelloMsg
-	suite        *cipherSuite
-	ecdheOk      bool
-	ecSignOk     bool
-	rsaDecryptOk bool
-	rsaSignOk    bool
-	sessionState *sessionState
-	finishedHash finishedHash
-	masterSecret []byte
-	cert         *Certificate
+	c                     *Conn
+	clientHello           *clientHelloMsg
+	hello                 *serverHelloMsg
+	suite                 *cipherSuite
+	ecdheOk               bool
+	ecSignOk              bool
+	rsaDecryptOk          bool
+	rsaSignOk             bool
+	sessionState          *sessionState
+	finishedHash          finishedHash
+	masterSecret          []byte
+	cert                  *Certificate
+	cachedClientHelloInfo *ClientHelloInfo
 }
 
 // serverHandshake performs a TLS handshake as a server.
@@ -196,7 +197,7 @@ func (hs *serverHandshakeState) processClientHello() error {
 	serverRandom := hs.hello.random
 	// Downgrade protection canaries. See RFC 8446, Section 4.1.3.
 	maxVers := c.config.maxSupportedVersion()
-	if maxVers >= VersionTLS12 && c.vers < maxVers {
+	if maxVers >= VersionTLS12 && c.vers < maxVers || c.vers == VersionGMSSL {
 		if c.vers == VersionTLS12 {
 			copy(serverRandom[24:], downgradeCanaryTLS12)
 		} else {
@@ -269,6 +270,7 @@ func (hs *serverHandshakeState) processClientHello() error {
 		switch priv.Public().(type) {
 		case *rsa.PublicKey:
 			hs.rsaDecryptOk = true
+		case *sm2.PublicKey:
 		default:
 			c.sendAlert(alertInternalError)
 			return fmt.Errorf("tls: unsupported decryption key type (%T)", priv.Public())
@@ -473,7 +475,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 	}
 
 	keyAgreement := hs.suite.ka(c.vers)
-	skx, err := keyAgreement.generateServerKeyExchange(c.config, hs.cert, hs.clientHello, hs.hello)
+	skx, err := keyAgreement.generateServerKeyExchange(c.config, hs.cert, hs.cert, hs.clientHello, hs.hello)
 	if err != nil {
 		c.sendAlert(alertHandshakeFailure)
 		return err
