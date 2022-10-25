@@ -57,10 +57,8 @@ func (a *BugCheckt) test1() {
 	// a.int2str(92601)
 	//a.call("baseURI")
 	a.call("charCodeAt", "0")
-
-	if err := a.call("customInt2String", new(big.Int).SetUint64(uint64(0))); err != nil {
-		log.Println(err)
-	}
+	a.call("int2str", new(big.Int).SetUint64(22))
+	a.call("tokenURI", new(big.Int).SetUint64(22))
 }
 
 func (a *BugCheckt) createContract(contractNameHex string) (err error) {
@@ -101,7 +99,7 @@ func (a *BugCheckt) call(method string, args ...interface{}) error {
 	}
 	simpleShow(func() {
 		result, _ := utils.ReadOutputWithABI(myAbi, method, resp.ContractResult.Result)
-		log.Println(result, resp.ContractResult.Code, resp.ContractResult.Message)
+		fmt.Println("metod", result)
 		// log.Println(resp.ContractResult.Result)
 	})
 	return nil

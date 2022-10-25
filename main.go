@@ -48,10 +48,10 @@ func main() {
 	// 	ContractName: "profile_QBLUMvxlCuRxsNXYvviKUQEk",
 	// }
 	t := unittest.BugCheckt{
-		// Abi:          "asserts/sol/contracts_bug_sol_BugContract.abi",
-		// Bin:          "asserts/sol/contracts_bug_sol_BugContract.bin",
-		Abi:          "asserts/sol/BugContract.abi",
-		Bin:          "asserts/sol/BugContract.bin",
+		Abi: "asserts/sol/contracts_bug2_sol_BugSimple.abi",
+		Bin: "asserts/sol/contracts_bug2_sol_BugSimple.bin",
+		// Abi:          "asserts/sol/BugContract.abi",
+		// Bin:          "asserts/sol/BugContract.bin",
 		ContractName: "",
 	}
 	if err := t.Init(); err != nil {
