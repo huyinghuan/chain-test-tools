@@ -36,6 +36,26 @@ func (addr *BugCheckt) Init() error {
 }
 
 func (a *BugCheckt) Run(args *Args) (err error) {
+	// return a.doTx(args)
+	//return a.doQueryTx("9a18030f1fb346b99f781d252936def4450b54a5c8f4406fbca3d9bfc4745635") // old
+	return a.doQueryTx("ce27b7a5a8b74dbfb5d1022411352c953bd0b7b6915b4980b91e6fadabfc900b") // after upgrade
+}
+
+func (a *BugCheckt) doQueryTx(txId string) error {
+	chain, err := getChain()
+	if err != nil {
+		return err
+	}
+	tx, err := chain.GetTxByTxId(txId)
+	if err != nil {
+		return err
+	}
+	log.Println(tx)
+	return nil
+}
+
+// 执行交易
+func (a *BugCheckt) doTx(args *Args) (err error) {
 	contractName := a.ContractName
 	contractNameHex := ""
 	if a.ContractName == "" {
@@ -99,7 +119,7 @@ func (a *BugCheckt) call(method string, args ...interface{}) error {
 	}
 	simpleShow(func() {
 		result, _ := utils.ReadOutputWithABI(myAbi, method, resp.ContractResult.Result)
-		fmt.Println("metod", result)
+		fmt.Println("metod", result, resp.TxId)
 		// log.Println(resp.ContractResult.Result)
 	})
 	return nil
